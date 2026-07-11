@@ -88,6 +88,44 @@ function DashboardContent() {
     loadShows();
   }, [user]);
 
+  // Auto-sync: Advance or remove tracked shows that are already in watch_history
+  useEffect(() => {
+    if (!user || shows.length === 0) return;
+
+    const autoSync = async () => {
+      try {
+        const { data: history } = await getSupabase()
+          .from("watch_history")
+          .select("tmdb_id, season_number, episode_number")
+          .eq("user_id", user.id);
+
+        if (!history) return;
+
+        const historySet = new Set(
+          history.map((h: any) => `${h.tmdb_id}_${h.season_number}_${h.episode_number}`)
+        );
+
+        let didSync = false;
+        for (const show of shows) {
+          if (show.media_type === "movie") continue;
+
+          // If the episode currently tracked as "Up Next" is ALREADY in the user's watch history
+          if (historySet.has(`${show.tmdb_id}_${show.current_season}_${show.current_episode}`)) {
+            console.log(`Auto-syncing watched show: ${show.name} S${show.current_season}E${show.current_episode}`);
+            handleWatched(show.tmdb_id, show.current_season, show.current_episode, show.media_type);
+            didSync = true;
+          }
+        }
+      } catch (e) {
+        console.error("Auto-sync failed", e);
+      }
+    };
+
+    autoSync();
+    // We only want to run this once when shows are initially loaded
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, loadingShows]);
+
   // Load Explore Data
   useEffect(() => {
     if (tab === "explore" && exploreData.trending.length === 0 && !loadingExplore) {
