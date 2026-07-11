@@ -33,7 +33,7 @@ export default function RootLayout({
           <div className="flex justify-center w-full min-h-screen">
             {/* Left Ad Banner */}
             <div className="hidden xl:block w-[160px] 2xl:w-[200px] flex-shrink-0 pt-24 sticky top-0 h-screen mx-4">
-              <AdBanner adSlot="LEFT_SLOT_ID_HERE" className="h-[600px]" format="vertical" />
+              <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_LEFT_SLOT} className="h-[600px]" format="vertical" />
             </div>
 
             {/* Main Content */}
@@ -43,7 +43,7 @@ export default function RootLayout({
 
             {/* Right Ad Banner */}
             <div className="hidden xl:block w-[160px] 2xl:w-[200px] flex-shrink-0 pt-24 sticky top-0 h-screen mx-4">
-              <AdBanner adSlot="RIGHT_SLOT_ID_HERE" className="h-[600px]" format="vertical" />
+              <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_RIGHT_SLOT} className="h-[600px]" format="vertical" />
             </div>
           </div>
         </AuthProvider>
