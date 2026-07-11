@@ -8,6 +8,7 @@ import ShowCard from "@/components/ShowCard";
 import EmotionMatrix from "@/components/EmotionMatrix";
 import SearchAutocomplete from "@/components/SearchAutocomplete";
 import BottomNav from "@/components/BottomNav";
+import FeedbackWidget from "@/components/FeedbackWidget";
 import { getTvDetails, getSeasonEpisodes, getTrendingTv, getTvRecommendations, getMovieDetails } from "@/lib/tmdb";
 import { getSupabase } from "@/lib/supabase";
 
@@ -326,14 +327,17 @@ function DashboardContent() {
                 TV Time Tracker
               </h1>
             </div>
-            <a
-              href="/profile"
-              className="w-9 h-9 rounded-full bg-accent-yellow/20 flex items-center justify-center
-                         text-sm font-bold text-accent-yellow hover:bg-accent-yellow/30 transition-colors"
-              title="Profile"
-            >
-              {user?.email?.charAt(0).toUpperCase() || "?"}
-            </a>
+            <div className="flex items-center gap-3">
+              <FeedbackWidget />
+              <a
+                href="/profile"
+                className="w-9 h-9 rounded-full bg-accent-yellow/20 flex items-center justify-center
+                           text-sm font-bold text-accent-yellow hover:bg-accent-yellow/30 transition-colors"
+                title="Profile"
+              >
+                {user?.email?.charAt(0).toUpperCase() || "?"}
+              </a>
+            </div>
           </div>
 
           <div className="absolute -bottom-6 w-full max-w-lg px-4 left-1/2 -translate-x-1/2">

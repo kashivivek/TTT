@@ -13,8 +13,8 @@ const FEATURES = [
   },
   {
     icon: "📥",
-    title: "Import History",
-    desc: "Bring your existing watch data from TV Time and other platforms with a simple zip upload.",
+    title: "Import History from TV Time 🆕",
+    desc: "Bring your existing watch data from TV Time with a simple zip upload.",
   },
   {
     icon: "😊",
