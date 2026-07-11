@@ -77,7 +77,10 @@ function DashboardContent() {
             }))
           );
           if (data.length === 0) {
-            setShowImportPopup(true);
+            const hasDismissed = localStorage.getItem("hasDismissedImport");
+            if (!hasDismissed) {
+              setShowImportPopup(true);
+            }
           }
         }
       } catch {
@@ -484,9 +487,9 @@ function DashboardContent() {
       <BottomNav />
       
       {showImportPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setShowImportPopup(false)}>
-          <div className="bg-bg-primary border border-card-surface p-6 rounded-2xl max-w-lg w-full relative shadow-2xl" onClick={e => e.stopPropagation()}>
-            <button className="absolute top-4 right-4 text-text-muted hover:text-white" onClick={() => setShowImportPopup(false)}>✕</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => { setShowImportPopup(false); localStorage.setItem("hasDismissedImport", "true"); }}>
+          <div className="bg-card-surface border border-accent-yellow/20 rounded-2xl max-w-lg w-full p-8 relative" onClick={(e) => e.stopPropagation()}>
+            <button className="absolute top-4 right-4 text-text-muted hover:text-white" onClick={() => { setShowImportPopup(false); localStorage.setItem("hasDismissedImport", "true"); }}>✕</button>
             <h2 style={{ marginTop: 0, fontSize: "24px", fontWeight: "bold" }}>🚀 Import Your TV Time History</h2>
             <p style={{ fontSize: "16px", color: "#aaa", marginBottom: "20px" }}>Move all your watched shows, movies, and custom watchlists over to our platform in just a few minutes!</p>
             

@@ -12,7 +12,6 @@ export default function SignupPage() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,32 +28,9 @@ export default function SignupPage() {
       setError(result.error);
       setLoading(false);
     } else {
-      setSuccess(true);
+      router.push("/dashboard");
     }
   };
-
-  if (success) {
-    return (
-      <main className="min-h-screen flex items-center justify-center px-4">
-        <div className="w-full max-w-sm text-center">
-          <div className="text-5xl mb-4">📬</div>
-          <h1 className="text-2xl font-extrabold text-text-primary mb-2">
-            Check your email
-          </h1>
-          <p className="text-text-muted mb-6">
-            We sent a confirmation link to <strong className="text-text-primary">{email}</strong>.
-            Click it to activate your account.
-          </p>
-          <a
-            href="/login"
-            className="text-accent-yellow hover:underline text-sm"
-          >
-            Go to login →
-          </a>
-        </div>
-      </main>
-    );
-  }
 
   return (
     <main className="min-h-screen flex items-center justify-center px-4">
