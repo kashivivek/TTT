@@ -1,0 +1,133 @@
+"use client";
+
+import { useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
+import { useRouter } from "next/navigation";
+
+export default function SignupPage() {
+  const { signUp } = useAuth();
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (password !== confirm) {
+      setError("Passwords don't match");
+      return;
+    }
+
+    setLoading(true);
+    const result = await signUp(email, password);
+    if (result.error) {
+      setError(result.error);
+      setLoading(false);
+    } else {
+      setSuccess(true);
+    }
+  };
+
+  if (success) {
+    return (
+      <main className="min-h-screen flex items-center justify-center px-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="text-5xl mb-4">📬</div>
+          <h1 className="text-2xl font-extrabold text-text-primary mb-2">
+            Check your email
+          </h1>
+          <p className="text-text-muted mb-6">
+            We sent a confirmation link to <strong className="text-text-primary">{email}</strong>.
+            Click it to activate your account.
+          </p>
+          <a
+            href="/login"
+            className="text-accent-yellow hover:underline text-sm"
+          >
+            Go to login →
+          </a>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen flex items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <a
+          href="/"
+          className="text-accent-yellow text-sm hover:underline mb-8 block text-center"
+        >
+          ← Back to home
+        </a>
+        <h1 className="text-3xl font-extrabold text-text-primary text-center mb-2">
+          Create your account
+        </h1>
+        <p className="text-text-muted text-center mb-8">
+          Start tracking your shows in seconds
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            className="w-full bg-card-surface text-text-primary rounded-xl px-4 py-3
+                       border border-transparent focus:border-accent-yellow outline-none
+                       placeholder:text-text-muted"
+          />
+          <input
+            type="password"
+            placeholder="Password (min 6 characters)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={6}
+            autoComplete="new-password"
+            className="w-full bg-card-surface text-text-primary rounded-xl px-4 py-3
+                       border border-transparent focus:border-accent-yellow outline-none
+                       placeholder:text-text-muted"
+          />
+          <input
+            type="password"
+            placeholder="Confirm password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            required
+            minLength={6}
+            autoComplete="new-password"
+            className="w-full bg-card-surface text-text-primary rounded-xl px-4 py-3
+                       border border-transparent focus:border-accent-yellow outline-none
+                       placeholder:text-text-muted"
+          />
+
+          {error && <p className="text-red-400 text-sm">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-accent-yellow text-bg-primary font-bold py-3 rounded-xl
+                       hover:brightness-110 transition-all disabled:opacity-50"
+          >
+            {loading ? "Creating account..." : "Sign Up Free"}
+          </button>
+        </form>
+
+        <p className="text-text-muted text-sm text-center mt-6">
+          Already have an account?{" "}
+          <a href="/login" className="text-accent-yellow hover:underline">
+            Log in
+          </a>
+        </p>
+      </div>
+    </main>
+  );
+}

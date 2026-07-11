@@ -1,0 +1,22 @@
+{
+  "name": "TV Time Tracker",
+  "short_name": "TTT",
+  "description": "Track your TV shows and movies. Migrate your watch history and never lose progress. A modern tracker for binge watchers and screen time enthusiasts.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#141414",
+  "theme_color": "#FFD200",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

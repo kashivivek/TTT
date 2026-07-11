@@ -1,0 +1,51 @@
+This is a comprehensive, production-ready implementation plan. You can copy and paste this directly into your coding agent (like Claude, Cursor, or ChatGPT) to generate the backend logic.System Implementation Plan: TV Time GDPR Data Importer1. System OverviewBuild a standalone processing pipeline that takes an encrypted TV Time GDPR .zip export file, extracts the relevant tracking data, cleans and de-duplicates the records, resolves them against a target entertainment database metadata structure, and prepares payloads for external synchronization.2. Core Execution Pipeline[Encrypted Zip Input] 
+       │
+       ▼
+ 1. EXTRACTION  ──► Unzip via password stream in memory (no disk write)
+       │
+       ▼
+ 2. SELECTION   ──► Locate tracking files using Regex / Fallbacks
+       │
+       ▼
+ 3. PARSING     ──► Row-by-row mapping & Data Routing (Watched vs Watchlist)
+       │
+       ▼
+ 4. RECOVERY    ──► Handle edge-cases (Missing timestamps, absolute numbers)
+       │
+       ▼
+ 5. RESOLUTION  ──► De-duplicate & Map to Universal IDs (IMDb/TMDb)
+       │
+       ▼
+[Final JSON Engine Payloads]
+3. Step-by-Step Technical RequirementsStep 1: Secure In-Memory Archive IngestionLogic: Prompt the user for the .zip file stream and a plain-text password string.Constraint: Do not unzip files to the local file system. Stream files directly from the archive's central directory index using the password to decrypt the data streams on the fly.Step 2: File Selection and Fallback StrategyScan the archive file names and apply this priority checklist:Primary Target (TV Episodes): File matching regex pattern .*tracking-prod-records-v2\.csv.*Primary Target (Movies): File matching regex pattern .*tracking-prod-records\.csv.*Secondary Fallback: If patterns above fail, check for relaxed naming schemas from third-party browser scrapers containing shows.csv, episodes.csv, or movies.csv. Raise an explicit InvalidArchiveStructure exception if no target file matches.Step 3: Row Parsing & Routing RulesIterate over the rows of each discovered CSV file using the following precise data mapping maps:File A: TV Episode Tracking (records-v2.csv)For each row, read and extract these fields:show_name (String) -> The name of the series.season_number (Integer) -> Season index.episode_number (Integer) -> Episode index.watched_at (String/Timestamp) or updated_at.progress (String/Percentage).Routing Logic:IF progress equals "100%" OR watched_at contains a valid datetime string:Route to the History Array.Normalize the timestamp to strict ISO 8601 UTC format (YYYY-MM-DDTHH:MM:SSZ).If the timestamp string is completely missing but marked 100%, fallback to setting the execution date/time as the watch date.ELSE IF row has is_watchlisted == true OR (watched_at is empty AND progress is < 100%):Route to the Watchlist Array.File B: Movie Tracking (records.csv)For each row, read and extract these fields:movie_name (String)release_date or year (Integer)type or action status markers.Routing Logic:If the row represents a completed view, map movie_name, year, and watched_at into the Movie History Array.If marked as planned/queued, push to the Movie Watchlist Array.Step 4: Data Deduplication & Data Integrity LogicBefore trying to sync, run a data cleanup engine over your loaded arrays:Unique Key Constraint: Create a composite lookup key for each item:For TV: UniqueKey = ShowName + "_" + SeasonNumber + "_" + EpisodeNumber + "_" + WatchedDateFor Movies: UniqueKey = MovieName + "_" + ReleaseYearLogic: Pass arrays through a filter to drop identical duplicates. If the exact same episode is marked watched on the exact same second, preserve only the first entry.Step 5: Entity Resolution System (Fuzzy Matching Engine)Because TV Time data uses raw strings and internal tracking IDs rather than universal IDs, your agent must implement a tiered resolution loop:Tier 1 (Hard IDs): If the row provides a direct imdb_id or tvdb_id, map this immediately to your output payload.Tier 2 (Text Match): Query your destination database or API using the raw string title combined with the release year filter.Tier 3 (Normalization Clean): If Tier 2 returns 0 matches, pass the title string through a regex filter to strip special characters, accents, and trailing metadata strings (e.g., convert "The Office (US)" to "The Office"). Retry the database match.Tier 4 (Failure Log): If all three tiers fail, append the row to an unresolved_items.log file so the user can fix it manually, rather than crashing the script.4. Target Output Structs (JSON Payloads)Your agent must structure the final sanitized data structures exactly like these schemas for API consumption:Watch History Payloadjson{
+  "movies": [
+    {
+      "title": "The Batman",
+      "year": 2022,
+      "ids": { "imdb": "tt1877830" },
+      "watched_at": "2023-11-14T20:15:00Z"
+    }
+  ],
+  "episodes": [
+    {
+      "show_title": "Breaking Bad",
+      "season": 1,
+      "episode": 1,
+      "watched_at": "2024-01-05T08:30:12Z"
+    }
+  ]
+}
+Use code with caution.Watchlist Payloadjson{
+  "movies": [
+    {
+      "title": "Dune: Part Two",
+      "year": 2024
+    }
+  ],
+  "shows": [
+    {
+      "title": "Severance"
+    }
+  ]
+}
+Use code with caution.5. Core Rules for the Coding AgentEnforce Rate Limiting: Implement an explicit token bucket or sliding-window rate-limiting function over the network calls in Step 5 to ensure queries do not violate target API endpoint thresholds.Graceful Batching: Process the generated data frames in adjustable chunks (e.g., batches of 100 rows) to minimize active memory overhead.Error Reporting: Return a summary object when execution finishes indicating: Total Rows Processed, Successfully Synced Rows, and Unresolved Rows Total.Provide these exact requirements to your coding agent, specify your preferred programming language, and prompt it to "Generate code for all steps following this architectural specification." Let me know if you would like me to adjust any of these architectural rules or mapping steps!
