@@ -3,6 +3,7 @@ import Script from "next/script";
 import "./globals.css";
 import AuthProvider from "@/components/AuthProvider";
 import AdBanner from "@/components/AdBanner";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: "TV Time Tracker",
@@ -66,6 +67,7 @@ export default function RootLayout({
             `,
           }}
         />
+        <SpeedInsights />
       </body>
     </html>
   );
