@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import AuthProvider from "@/components/AuthProvider";
+import Script from "next/script";
 import AdBanner from "@/components/AdBanner";
 
 export const metadata: Metadata = {
@@ -30,6 +31,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9050370531125390"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
+      </head>
       <body className="bg-bg-primary text-text-primary min-h-screen">
         <AuthProvider>
           <div className="flex justify-center w-full min-h-screen">
