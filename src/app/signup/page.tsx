@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 export default function SignupPage() {
   const { signUp } = useAuth();
@@ -10,6 +11,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -22,8 +24,13 @@ export default function SignupPage() {
       return;
     }
 
+    if (!captchaToken) {
+      setError("Please complete the captcha verification.");
+      return;
+    }
+
     setLoading(true);
-    const result = await signUp(email, password);
+    const result = await signUp(email, password, captchaToken);
     if (result.error) {
       setError(result.error);
       setLoading(false);
@@ -84,8 +91,13 @@ export default function SignupPage() {
                        border border-transparent focus:border-accent-yellow outline-none
                        placeholder:text-text-muted"
           />
-
-          {error && <p className="text-red-400 text-sm">{error}</p>}
+          <div className="flex justify-center my-4">
+            <HCaptcha
+              sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || ""}
+              onVerify={(token) => setCaptchaToken(token)}
+            />
+          </div>
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
           <button
             type="submit"
