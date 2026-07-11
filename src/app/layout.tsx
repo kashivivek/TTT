@@ -4,7 +4,6 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import AuthProvider from "@/components/AuthProvider";
-import Script from "next/script";
 import AdBanner from "@/components/AdBanner";
 
 export const metadata: Metadata = {
