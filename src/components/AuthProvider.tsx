@@ -8,7 +8,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (email: string, password: string, captchaToken?: string) => Promise<{ error?: string }>;
+  signUp: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
 }
 
@@ -55,12 +55,8 @@ export default function AuthProvider({
     return { error: error?.message };
   };
 
-  const signUp = async (email: string, password: string, captchaToken?: string) => {
-    const { error } = await getSupabase().auth.signUp({ 
-      email, 
-      password,
-      options: { captchaToken }
-    });
+  const signUp = async (email: string, password: string) => {
+    const { error } = await getSupabase().auth.signUp({ email, password });
     return { error: error?.message };
   };
 
