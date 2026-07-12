@@ -5,9 +5,10 @@ import { EMOTIONS } from "@/lib/types";
 interface EmotionMatrixProps {
   onSelect: (emotion: string) => void;
   onClose: () => void;
+  onSnooze?: () => void;
 }
 
-export default function EmotionMatrix({ onSelect, onClose }: EmotionMatrixProps) {
+export default function EmotionMatrix({ onSelect, onClose, onSnooze }: EmotionMatrixProps) {
   return (
     <div className="slide-up fixed inset-x-0 bottom-[60px] z-50 pointer-events-none pb-4">
       <div className="bg-card-surface/95 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-2xl max-w-2xl mx-auto pointer-events-auto mx-4 sm:mx-auto">
@@ -35,6 +36,16 @@ export default function EmotionMatrix({ onSelect, onClose }: EmotionMatrixProps)
             </button>
           ))}
         </div>
+        {onSnooze && (
+          <div className="mt-6 flex justify-center">
+            <button 
+              onClick={onSnooze}
+              className="text-xs text-text-muted hover:text-white underline decoration-white/30 hover:decoration-white transition-all"
+            >
+              Snooze for 1 week
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

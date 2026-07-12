@@ -73,23 +73,30 @@ export default function ShowDetailsPage(props: { params: Promise<{ id: string }>
   }, [user, tmdbId]);
 
   const handleTrackShow = async () => {
-    if (!user || isTracked || !details) return;
+    if (!user || !details) return;
     
     try {
-      const firstSeason = details.seasons?.find((s: any) => s.season_number >= 1)?.season_number ?? 1;
-      // We just insert. We already checked isTracked at the top.
-      await getSupabase().from("tracked_shows").insert({
-        user_id: user.id,
-        tmdb_id: tmdbId,
-        name: details.name,
-        media_type: "tv",
-        backdrop_path: details.backdrop_path,
-        current_season: firstSeason,
-        current_episode: 1,
-        episode_title: "Episode 1",
-        updated_at: new Date().toISOString(),
-      });
-      setIsTracked(true);
+      if (isTracked) {
+        await getSupabase().from("tracked_shows")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("tmdb_id", tmdbId);
+        setIsTracked(false);
+      } else {
+        const firstSeason = details.seasons?.find((s: any) => s.season_number >= 1)?.season_number ?? 1;
+        await getSupabase().from("tracked_shows").insert({
+          user_id: user.id,
+          tmdb_id: tmdbId,
+          name: details.name,
+          media_type: "tv",
+          backdrop_path: details.backdrop_path,
+          current_season: firstSeason,
+          current_episode: 1,
+          episode_title: "Episode 1",
+          updated_at: new Date().toISOString(),
+        });
+        setIsTracked(true);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -112,6 +119,93 @@ export default function ShowDetailsPage(props: { params: Promise<{ id: string }>
         console.error(e);
       }
       setLoadingSeason(false);
+    }
+  };
+
+  const handleMarkSeasonWatched = async (e: React.MouseEvent, seasonNum: number) => {
+    e.stopPropagation();
+    if (!user) return;
+    
+    // First, ensure we have the episode data for this season
+    let eps = seasonData[seasonNum];
+    if (!eps) {
+      try {
+        const data = await getSeasonEpisodes(tmdbId, seasonNum);
+        eps = data.episodes || [];
+        setSeasonData(prev => ({ ...prev, [seasonNum]: eps }));
+      } catch (err) {
+        console.error(err);
+        return;
+      }
+    }
+
+    if (!eps || eps.length === 0) return;
+
+    const allWatched = eps.every((ep: Episode) => watchedEpisodes.has(`${seasonNum}-${ep.episode_number}`));
+
+    const db = getSupabase();
+    
+    try {
+      if (allWatched) {
+        const episodeNumbers = eps.map((e: Episode) => e.episode_number);
+        await db.from("watch_history")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("tmdb_id", tmdbId)
+          .eq("season_number", seasonNum)
+          .in("episode_number", episodeNumbers);
+          
+        setWatchedEpisodes(prev => {
+          const next = new Set(prev);
+          eps.forEach((ep: Episode) => next.delete(`${seasonNum}-${ep.episode_number}`));
+          return next;
+        });
+      } else {
+        // Build rows to insert
+        const rows = eps.map((ep: Episode) => ({
+          user_id: user.id,
+          tmdb_id: tmdbId,
+          media_type: "tv",
+          season_number: seasonNum,
+          episode_number: ep.episode_number
+        }));
+
+        // Upsert to avoid duplicate key errors
+        await db.from("watch_history").upsert(rows, { onConflict: "user_id, tmdb_id, season_number, episode_number" });
+        
+        // Update local state
+        setWatchedEpisodes(prev => {
+          const next = new Set(prev);
+          eps.forEach((ep: Episode) => next.add(`${seasonNum}-${ep.episode_number}`));
+          return next;
+        });
+
+        if (!isTracked) {
+          // Temporarily set isTracked to true locally to avoid infinite recursion or duplicate tracks
+          setIsTracked(true);
+          const firstSeason = details?.seasons?.find((s: any) => s.season_number >= 1)?.season_number ?? 1;
+          await db.from("tracked_shows").insert({
+            user_id: user.id,
+            tmdb_id: tmdbId,
+            name: details?.name,
+            media_type: "tv",
+            backdrop_path: details?.backdrop_path,
+            current_season: seasonNum,
+            current_episode: eps[eps.length - 1].episode_number,
+            episode_title: "Episode " + eps[eps.length - 1].episode_number,
+            updated_at: new Date().toISOString(),
+          });
+        } else {
+          // Point tracked_shows to the last episode of this season
+          await db.from("tracked_shows").update({
+            current_season: seasonNum,
+            current_episode: eps[eps.length - 1].episode_number,
+            updated_at: new Date().toISOString()
+          }).eq("user_id", user.id).eq("tmdb_id", tmdbId);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to mark season", err);
     }
   };
 
@@ -210,15 +304,14 @@ export default function ShowDetailsPage(props: { params: Promise<{ id: string }>
             
             <button
               onClick={handleTrackShow}
-              disabled={isTracked}
-              className={`px-5 py-2.5 rounded-full font-bold transition-all flex items-center gap-2
+              className={`px-5 py-2.5 rounded-full font-bold transition-all flex items-center gap-2 group
                 ${isTracked 
-                  ? "bg-gray-800 text-accent-yellow border border-gray-700 opacity-80 cursor-default" 
+                  ? "bg-gray-800 text-accent-yellow border border-gray-700 hover:bg-red-900/30 hover:text-red-400 hover:border-red-900" 
                   : "bg-accent-yellow text-bg-primary hover:brightness-110"
                 }`}
             >
               {isTracked ? (
-                <>✓ Tracked</>
+                <><span className="group-hover:hidden">✓ Tracked</span><span className="hidden group-hover:block">Untrack</span></>
               ) : (
                 <>+ Add Show</>
               )}
@@ -290,9 +383,22 @@ export default function ShowDetailsPage(props: { params: Promise<{ id: string }>
                     <span className="font-bold text-lg">{season.name}</span>
                     <span className="text-xs text-text-muted">{season.episode_count} episodes</span>
                   </div>
-                  <span className="text-xl text-text-muted">
-                    {expandedSeason === season.season_number ? "−" : "+"}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={(e) => handleMarkSeasonWatched(e, season.season_number)}
+                      title="Toggle season watched status"
+                      className={`w-8 h-8 rounded-full hover:text-black flex items-center justify-center transition-colors ${
+                        (Array.from(watchedEpisodes).filter(id => id.startsWith(`${season.season_number}-`)).length >= season.episode_count) && season.episode_count > 0
+                          ? "bg-accent-yellow text-black"
+                          : "bg-white/5 hover:bg-accent-yellow text-text-muted"
+                      }`}
+                    >
+                      ✓
+                    </button>
+                    <span className="text-xl text-text-muted w-8 text-center">
+                      {expandedSeason === season.season_number ? "−" : "+"}
+                    </span>
+                  </div>
                 </button>
                 
                 {expandedSeason === season.season_number && (

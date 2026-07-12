@@ -9,6 +9,7 @@ import EmotionMatrix from "@/components/EmotionMatrix";
 import SearchAutocomplete from "@/components/SearchAutocomplete";
 import BottomNav from "@/components/BottomNav";
 import FeedbackWidget from "@/components/FeedbackWidget";
+import WhatsNewWidget from "@/components/WhatsNewWidget";
 import { getTvDetails, getSeasonEpisodes, getTrendingTv, getTvRecommendations, getMovieDetails } from "@/lib/tmdb";
 import { getSupabase } from "@/lib/supabase";
 
@@ -20,6 +21,7 @@ interface TrackedShowState {
   current_season: number;
   current_episode: number;
   episode_title: string;
+  updated_at?: string;
 }
 
 interface ExploreContent {
@@ -34,8 +36,10 @@ function DashboardContent() {
   const tab = searchParams.get("tab") || "shows";
   
   const [shows, setShows] = useState<TrackedShowState[]>([]);
-  const [showEmotionFor, setShowEmotionFor] = useState<number | null>(null);
+  const [showEmotionFor, setShowEmotionFor] = useState<{tmdbId: number, season: number, episode: number} | null>(null);
   const [loadingShows, setLoadingShows] = useState(true);
+  const [lastWatchedAt, setLastWatchedAt] = useState<Map<number, Date>>(new Map());
+  const [refreshKey, setRefreshKey] = useState(0);
   
   const [exploreData, setExploreData] = useState<ExploreContent>({ trending: [], recommendations: [] });
   const [loadingExplore, setLoadingExplore] = useState(false);
@@ -45,6 +49,17 @@ function DashboardContent() {
   const [showImportPopup, setShowImportPopup] = useState(false);
   const [loadingUpcoming, setLoadingUpcoming] = useState(false);
 
+  // Re-sync shows when user returns to this tab
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        setRefreshKey(k => k + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
   // Auth guard
   useEffect(() => {
     if (!authLoading && !user) {
@@ -52,17 +67,34 @@ function DashboardContent() {
     }
   }, [user, authLoading, router]);
 
-  // Load tracked shows from Supabase
+  // Load tracked shows from Supabase (re-runs on tab focus via refreshKey)
   useEffect(() => {
     if (!user) return;
 
     const loadShows = async () => {
       try {
-        const { data } = await getSupabase()
-          .from("tracked_shows")
-          .select("*, updated_at")
-          .eq("user_id", user.id)
-          .order("updated_at", { ascending: false });
+        const [{ data }, { data: watchData }] = await Promise.all([
+          getSupabase()
+            .from("tracked_shows")
+            .select("*, updated_at")
+            .eq("user_id", user.id)
+            .order("updated_at", { ascending: false }),
+          getSupabase()
+            .from("watch_history")
+            .select("tmdb_id, watched_at")
+            .eq("user_id", user.id)
+            .order("watched_at", { ascending: false })
+        ]);
+
+        if (watchData) {
+          const map = new Map<number, Date>();
+          watchData.forEach((row: any) => {
+            if (!map.has(row.tmdb_id) && row.watched_at) {
+              map.set(row.tmdb_id, new Date(row.watched_at));
+            }
+          });
+          setLastWatchedAt(map);
+        }
 
         if (data) {
           setShows(
@@ -74,6 +106,7 @@ function DashboardContent() {
               current_season: row.current_season as number,
               current_episode: row.current_episode as number,
               episode_title: (row.episode_title as string) || "Episode 1",
+              updated_at: row.updated_at as string | undefined,
             }))
           );
           if (data.length === 0) {
@@ -90,45 +123,8 @@ function DashboardContent() {
     };
 
     loadShows();
-  }, [user]);
+  }, [user, refreshKey]);
 
-  // Auto-sync: Advance or remove tracked shows that are already in watch_history
-  useEffect(() => {
-    if (!user || shows.length === 0) return;
-
-    const autoSync = async () => {
-      try {
-        const { data: history } = await getSupabase()
-          .from("watch_history")
-          .select("tmdb_id, season_number, episode_number")
-          .eq("user_id", user.id);
-
-        if (!history) return;
-
-        const historySet = new Set(
-          history.map((h: any) => `${h.tmdb_id}_${h.season_number}_${h.episode_number}`)
-        );
-
-        let didSync = false;
-        for (const show of shows) {
-          if (show.media_type === "movie") continue;
-
-          // If the episode currently tracked as "Up Next" is ALREADY in the user's watch history
-          if (historySet.has(`${show.tmdb_id}_${show.current_season}_${show.current_episode}`)) {
-            console.log(`Auto-syncing watched show: ${show.name} S${show.current_season}E${show.current_episode}`);
-            handleWatched(show.tmdb_id, show.current_season, show.current_episode, show.media_type);
-            didSync = true;
-          }
-        }
-      } catch (e) {
-        console.error("Auto-sync failed", e);
-      }
-    };
-
-    autoSync();
-    // We only want to run this once when shows are initially loaded
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, loadingShows]);
 
   // Load Explore Data
   useEffect(() => {
@@ -190,13 +186,12 @@ function DashboardContent() {
   const saveShow = async (show: TrackedShowState) => {
     if (!user) return;
     try {
-      // Use update instead of upsert to avoid constraint issues, 
-      // since the show must already exist in tracked_shows
       await getSupabase().from("tracked_shows")
         .update({
           current_season: show.current_season,
           current_episode: show.current_episode,
           episode_title: show.episode_title,
+          media_type: show.media_type, // persist awaiting state
           updated_at: new Date().toISOString(),
         })
         .eq("user_id", user.id)
@@ -208,8 +203,39 @@ function DashboardContent() {
 
 
 
+  const handleEmotionSelect = async (emotion: string) => {
+    if (!user || !showEmotionFor) return;
+    try {
+      await getSupabase().from("watch_history").update({ emotion })
+        .eq("user_id", user.id)
+        .eq("tmdb_id", showEmotionFor.tmdbId)
+        .eq("season_number", showEmotionFor.season)
+        .eq("episode_number", showEmotionFor.episode);
+    } catch (e) {
+      console.error(e);
+    }
+    setShowEmotionFor(null);
+  };
+
+  const handleSnooze = async () => {
+    if (!user) return;
+    const snoozeUntil = new Date();
+    snoozeUntil.setDate(snoozeUntil.getDate() + 7); // Snooze for 1 week
+    try {
+      await getSupabase().auth.updateUser({
+        data: { snooze_feedback_until: snoozeUntil.toISOString() }
+      });
+    } catch (e) {
+      console.error(e);
+    }
+    setShowEmotionFor(null);
+  };
+
   const handleWatched = (tmdbId: number, season: number, episode: number, mediaType: string = "tv") => {
-    setShowEmotionFor(tmdbId);
+    const snoozeUntil = user?.user_metadata?.snooze_feedback_until;
+    if (!snoozeUntil || new Date(snoozeUntil) < new Date()) {
+      setShowEmotionFor({ tmdbId, season, episode });
+    }
 
     // Record to watch_history
     if (user) {
@@ -221,21 +247,28 @@ function DashboardContent() {
           media_type: mediaType,
           season_number: season,
           episode_number: episode,
+          watched_at: new Date().toISOString(),
         })
         .then(() => {});
     }
 
-    // If it's a movie, it's done. Remove from tracked_shows.
+    // If it's a movie, it's done — mark as completed instead of deleting.
     if (mediaType === "movie") {
-      setTimeout(() => {
-        setShows((prev) => prev.filter((s) => s.tmdb_id !== tmdbId));
+      setTimeout(async () => {
+        const completedAt = new Date().toISOString();
+        setShows((prev) =>
+          prev.map((s) =>
+            s.tmdb_id === tmdbId
+              ? { ...s, media_type: "completed_movie", updated_at: completedAt }
+              : s
+          )
+        );
         if (user) {
-          getSupabase()
+          await getSupabase()
             .from("tracked_shows")
-            .delete()
+            .update({ media_type: "completed_movie", updated_at: completedAt })
             .eq("user_id", user.id)
-            .eq("tmdb_id", tmdbId)
-            .then(() => {});
+            .eq("tmdb_id", tmdbId);
         }
       }, 1200);
       return;
@@ -276,28 +309,56 @@ function DashboardContent() {
               nextSeason.season_number
             );
             const firstEp = nextEps.episodes?.[0];
-            setShows((prev) => {
-              const updated = prev.map((s) =>
-                s.tmdb_id === tmdbId
-                  ? {
-                      ...s,
-                      current_season: nextSeason.season_number,
-                      current_episode: firstEp?.episode_number ?? 1,
-                      episode_title: firstEp?.name ?? "Episode 1",
-                    }
-                  : s
-              );
-              const show = updated.find((s) => s.tmdb_id === tmdbId);
-              if (show) saveShow(show);
-              return updated;
-            });
+
+            if (!firstEp) {
+              // Next season announced but no episodes yet — move to awaiting state
+              setShows((prev) => {
+                const updated = prev.map((s) =>
+                  s.tmdb_id === tmdbId
+                    ? {
+                        ...s,
+                        current_season: nextSeason.season_number,
+                        current_episode: 1,
+                        episode_title: "Release date not yet confirmed",
+                        media_type: "awaiting",
+                      }
+                    : s
+                );
+                const show = updated.find((s) => s.tmdb_id === tmdbId);
+                if (show) saveShow(show);
+                return updated;
+              });
+            } else {
+              setShows((prev) => {
+                const updated = prev.map((s) =>
+                  s.tmdb_id === tmdbId
+                    ? {
+                        ...s,
+                        current_season: nextSeason.season_number,
+                        current_episode: firstEp.episode_number,
+                        episode_title: firstEp.name,
+                      }
+                    : s
+                );
+                const show = updated.find((s) => s.tmdb_id === tmdbId);
+                if (show) saveShow(show);
+                return updated;
+              });
+            }
           } else {
-            // Show complete — remove from tracked and from DB
-            setShows((prev) => prev.filter((s) => s.tmdb_id !== tmdbId));
+            // Show complete — mark as completed instead of deleting
+            const completedAt = new Date().toISOString();
+            setShows((prev) =>
+              prev.map((s) =>
+                s.tmdb_id === tmdbId
+                  ? { ...s, media_type: "completed", updated_at: completedAt }
+                  : s
+              )
+            );
             if (user) {
               getSupabase()
                 .from("tracked_shows")
-                .delete()
+                .update({ media_type: "completed", updated_at: completedAt })
                 .eq("user_id", user.id)
                 .eq("tmdb_id", tmdbId)
                 .then(() => {});
@@ -331,6 +392,7 @@ function DashboardContent() {
               </h1>
             </div>
             <div className="flex items-center gap-3">
+              <WhatsNewWidget />
               <FeedbackWidget />
               <a
                 href="/profile"
@@ -411,76 +473,246 @@ function DashboardContent() {
                   Search above to add and start tracking
                 </p>
               </div>
-            ) : (
-              <div>
-                <h2 className="text-xl font-bold mb-4">{tab === "movies" ? "Movies" : "Shows"}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {shows
-                    .filter((s) => tab === "movies" ? (s.media_type === "movie" && !unreleasedMovieIds.has(s.tmdb_id)) : s.media_type !== "movie")
-                    .map((show, index) => (
-                    <div key={show.tmdb_id}>
-                      <ShowCard
-                        tmdbId={show.tmdb_id}
-                        name={show.name}
-                        backdropPath={show.backdrop_path}
-                        currentSeason={show.current_season}
-                        currentEpisode={show.current_episode}
-                        episodeTitle={show.episode_title}
-                        mediaType={show.media_type}
-                        onWatched={handleWatched}
-                      />
-                    </div>
-                  ))}
-                </div>
-                
-                {tab === "shows" && (
-                  <div className="mt-12">
-                    <h2 className="text-xl font-bold mb-4">Upcoming Episodes</h2>
-                    <div className="bg-card-surface p-6 rounded-xl text-center">
-                      <p className="text-text-muted text-sm">No upcoming episodes airing soon for your tracked shows.</p>
-                    </div>
-                  </div>
-                )}
+            ) : (() => {
+              const twoWeeksAgo = new Date();
+              twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
 
+              const tvShows = shows.filter(s => s.media_type !== "movie" && s.media_type !== "completed_movie");
+              
+              const isFutureAwaiting = (s: TrackedShowState) => {
+                  if (s.media_type === "awaiting") {
+                     const match = s.episode_title.match(/Airs:\s*([0-9-]+)/);
+                     if (match) {
+                        // Check if air date is strictly in the future (tomorrow or later)
+                        const airDate = new Date(match[1]);
+                        airDate.setHours(0, 0, 0, 0);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        return airDate.getTime() > today.getTime();
+                     }
+                     return true; // no date = still awaiting
+                  }
+                  return false;
+              };
+
+              const awaitingShows = tvShows.filter(s => isFutureAwaiting(s));
+              const completedShows = tvShows.filter(s => s.media_type === "completed");
+              const watchableShows = tvShows.filter(s => !isFutureAwaiting(s) && s.media_type !== "completed");
+
+              const sortByLastWatched = (a: TrackedShowState, b: TrackedShowState) =>
+                (lastWatchedAt.get(b.tmdb_id)?.getTime() ?? 0) - (lastWatchedAt.get(a.tmdb_id)?.getTime() ?? 0);
+
+              const activeShows = watchableShows
+                .filter(s => !lastWatchedAt.has(s.tmdb_id) || (lastWatchedAt.get(s.tmdb_id)! >= twoWeeksAgo))
+                .sort(sortByLastWatched);
+
+              const inactiveShows = watchableShows
+                .filter(s => lastWatchedAt.has(s.tmdb_id) && lastWatchedAt.get(s.tmdb_id)! < twoWeeksAgo)
+                .sort(sortByLastWatched);
+
+              const movieShows = shows.filter(s => s.media_type === "movie" && !unreleasedMovieIds.has(s.tmdb_id));
+              const completedMovies = shows.filter(s => s.media_type === "completed_movie");
+
+              const renderShowCard = (show: TrackedShowState) => (
+                <div key={show.tmdb_id}>
+                  <ShowCard
+                    tmdbId={show.tmdb_id}
+                    name={show.name}
+                    backdropPath={show.backdrop_path}
+                    currentSeason={show.current_season}
+                    currentEpisode={show.current_episode}
+                    episodeTitle={show.episode_title}
+                    mediaType={show.media_type}
+                    onWatched={handleWatched}
+                  />
+                </div>
+              );
+
+              return (
+              <div>
                 {tab === "movies" && (
-                  <div className="mt-12">
-                    <h2 className="text-xl font-bold mb-4">Upcoming Movies</h2>
-                    {loadingUpcoming ? (
-                      <div className="text-center py-10">
-                        <div className="w-6 h-6 border-2 border-accent-yellow border-t-transparent rounded-full animate-spin mx-auto" />
-                      </div>
-                    ) : upcomingMovies.length === 0 ? (
-                      <div className="bg-card-surface p-6 rounded-xl text-center">
-                        <p className="text-text-muted text-sm">No upcoming unreleased movies in your tracking list.</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-                        {upcomingMovies.map((movie) => (
-                          <div key={movie.id} onClick={() => router.push(`/movies/${movie.id}`)} className="cursor-pointer hover:ring-2 hover:ring-accent-yellow rounded-xl overflow-hidden bg-card-surface">
-                            {movie.backdrop_path && (
-                              <img src={`https://image.tmdb.org/t/p/w500${movie.backdrop_path}`} alt={movie.title} className="w-full h-24 object-cover opacity-80 hover:opacity-100" />
-                            )}
-                            <div className="p-3">
-                              <h3 className="font-bold text-sm truncate">{movie.title}</h3>
-                              {movie.release_date && <p className="text-xs text-text-muted">{movie.release_date}</p>}
+                  <>
+                    <h2 className="text-xl font-bold mb-4">Movies</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {movieShows.map(renderShowCard)}
+                    </div>
+
+                    <div className="mt-10">
+                      <h2 className="text-xl font-bold mb-4">Upcoming Movies</h2>
+                      {loadingUpcoming ? (
+                        <div className="text-center py-10">
+                          <div className="w-6 h-6 border-2 border-accent-yellow border-t-transparent rounded-full animate-spin mx-auto" />
+                        </div>
+                      ) : upcomingMovies.length === 0 ? (
+                        <div className="bg-card-surface p-6 rounded-xl text-center">
+                          <p className="text-text-muted text-sm">No upcoming unreleased movies in your tracking list.</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+                          {upcomingMovies.map((movie) => (
+                            <div key={movie.id} onClick={() => router.push(`/movies/${movie.id}`)} className="cursor-pointer hover:ring-2 hover:ring-accent-yellow rounded-xl overflow-hidden bg-card-surface">
+                              {movie.backdrop_path && (
+                                <img src={`https://image.tmdb.org/t/p/w500${movie.backdrop_path}`} alt={movie.title} className="w-full h-24 object-cover opacity-80 hover:opacity-100" />
+                              )}
+                              <div className="p-3">
+                                <h3 className="font-bold text-sm truncate">{movie.title}</h3>
+                                {movie.release_date && <p className="text-xs text-text-muted">{movie.release_date}</p>}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {completedMovies.length > 0 && (
+                      <div className="mt-10">
+                        <h2 className="text-xl font-bold mb-1">Completed</h2>
+                        <p className="text-text-muted text-sm mb-4">Movies you've watched</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {completedMovies
+                            .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime())
+                            .map(movie => (
+                            <div
+                              key={movie.tmdb_id}
+                              onClick={() => router.push(`/movies/${movie.tmdb_id}`)}
+                              className="relative w-full h-36 sm:h-44 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-accent-yellow/50 transition-all"
+                            >
+                              {movie.backdrop_path && (
+                                <img
+                                  src={`https://image.tmdb.org/t/p/w780${movie.backdrop_path}`}
+                                  alt=""
+                                  className="absolute inset-0 w-full h-full object-cover"
+                                  loading="lazy"
+                                />
+                              )}
+                              <div className="absolute inset-0" style={{ background: "linear-gradient(to right, rgba(20,20,20,0.95), rgba(20,20,20,0.4))" }} />
+                              <div className="relative z-10 flex flex-col justify-center h-full px-5">
+                                <span className="text-accent-yellow font-bold text-sm tracking-wide">Movie</span>
+                                <h2 className="text-white font-bold text-lg leading-tight truncate">{movie.name}</h2>
+                                <p className="text-text-muted text-sm mt-1">
+                                  Watched on {movie.updated_at ? new Date(movie.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
-                  </div>
+                  </>
+                )}
+
+                {tab === "shows" && (
+                  <>
+                    {activeShows.length > 0 && (
+                      <>
+                        <h2 className="text-xl font-bold mb-4">Shows</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {activeShows.map(renderShowCard)}
+                        </div>
+                      </>
+                    )}
+
+                    {inactiveShows.length > 0 && (
+                      <div className="mt-10">
+                        <h2 className="text-xl font-bold mb-1">Not Watched Recently</h2>
+                        <p className="text-text-muted text-sm mb-4">Shows you haven't watched in over 2 weeks</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {inactiveShows.map(renderShowCard)}
+                        </div>
+                      </div>
+                    )}
+
+                    {awaitingShows.length > 0 && (
+                      <div className="mt-10">
+                        <h2 className="text-xl font-bold mb-1">Upcoming Episodes</h2>
+                        <p className="text-text-muted text-sm mb-4">Upcoming episodes and unreleased seasons</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {awaitingShows.map(show => {
+                            const isUnknown = show.episode_title === 'Release date not yet confirmed';
+                            const match = show.episode_title.match(/Episode (\d+) Airs:\s*([0-9-]+)/);
+                            const futureEp = match ? match[1] : null;
+                            const futureDate = match ? new Date(match[2]).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
+                            const announcedSeason = show.current_episode > 0 ? show.current_season + 1 : show.current_season;
+                            
+                            return (
+                            <div
+                              key={show.tmdb_id}
+                              onClick={() => router.push(`/shows/${show.tmdb_id}`)}
+                              className="relative w-full h-36 sm:h-44 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-accent-yellow/50 transition-all"
+                            >
+                              {show.backdrop_path && (
+                                <img
+                                  src={`https://image.tmdb.org/t/p/w780${show.backdrop_path}`}
+                                  alt=""
+                                  className="absolute inset-0 w-full h-full object-cover opacity-40"
+                                />
+                              )}
+                              <div className="absolute inset-0" style={{ background: "linear-gradient(to right, rgba(20,20,20,0.95), rgba(20,20,20,0.4))" }} />
+                              <div className="relative z-10 flex flex-col justify-center h-full px-5">
+                                <span className="text-accent-yellow font-bold text-sm tracking-wide">
+                                  {isUnknown ? `Season ${announcedSeason} announced` : `Season ${show.current_season} Episode ${futureEp}`}
+                                </span>
+                                <h2 className="text-white font-bold text-lg leading-tight truncate">{show.name}</h2>
+                                <p className="text-text-muted text-xs mt-1">
+                                  {isUnknown ? 'Release date not yet confirmed' : `Airs ${futureDate}`}
+                                </p>
+                              </div>
+                            </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {completedShows.length > 0 && (
+                      <div className="mt-10">
+                        <h2 className="text-xl font-bold mb-1">Completed</h2>
+                        <p className="text-text-muted text-sm mb-4">Shows you've fully watched</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {completedShows
+                            .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime())
+                            .map(show => (
+                            <div
+                              key={show.tmdb_id}
+                              onClick={() => router.push(`/shows/${show.tmdb_id}`)}
+                              className="relative w-full h-36 sm:h-44 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-accent-yellow/50 transition-all"
+                            >
+                              {show.backdrop_path && (
+                                <img
+                                  src={`https://image.tmdb.org/t/p/w780${show.backdrop_path}`}
+                                  alt=""
+                                  className="absolute inset-0 w-full h-full object-cover"
+                                  loading="lazy"
+                                />
+                              )}
+                              <div className="absolute inset-0" style={{ background: "linear-gradient(to right, rgba(20,20,20,0.95), rgba(20,20,20,0.4))" }} />
+                              <div className="relative z-10 flex flex-col justify-center h-full px-5">
+                                <h2 className="text-white font-bold text-lg leading-tight truncate">{show.name}</h2>
+                                <p className="text-text-muted text-sm mt-1">
+                                  Completed on {show.updated_at ? new Date(show.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
-            )}
-          </>
-        )}
+              );
+            })()
+          }
+        </>
+      )}
       </div>
 
       {/* Emotion overlay */}
       {showEmotionFor !== null && (
         <EmotionMatrix
-          onSelect={() => setShowEmotionFor(null)}
+          onSelect={handleEmotionSelect}
           onClose={() => setShowEmotionFor(null)}
+          onSnooze={handleSnooze}
         />
       )}
 

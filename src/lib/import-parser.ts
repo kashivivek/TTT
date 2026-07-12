@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { searchMulti } from "./tmdb";
+import { searchMulti, tmdbFetch } from "./tmdb";
 import { getSupabase } from "./supabase";
 import type { WatchHistoryEntry } from "./types";
 
@@ -367,7 +367,18 @@ export async function parseImportZip(
       } else if (r.media_type === "movie") {
          if (r.type === "watch") {
             watchedMovies.add(tmdbData.id);
-            finalTrackedShows.delete(tmdbData.id);
+            // Mark as completed_movie so it appears in the Completed section
+            finalTrackedShows.set(tmdbData.id, {
+               user_id: user.id,
+               tmdb_id: tmdbData.id,
+               name: tmdbData.name,
+               media_type: "completed_movie",
+               backdrop_path: tmdbData.backdrop,
+               current_season: 0,
+               current_episode: 0,
+               episode_title: "",
+               updated_at: r.watched_at || new Date().toISOString()
+            });
          } else if (r.type === "track" && !watchedMovies.has(tmdbData.id)) {
             finalTrackedShows.set(tmdbData.id, {
                user_id: user.id,
@@ -444,18 +455,108 @@ export async function parseImportZip(
       }
     }
 
-      const trackPayload = Array.from(finalTrackedShows.values());
+    // Resolve Next Episode for TV Shows
+    const trackPayloadRaw = Array.from(finalTrackedShows.values());
+    const tvShowsToResolve = trackPayloadRaw.filter(t => t.media_type === 'tv' && t.current_season > 0);
+    let resolvedTv = 0;
+    
+    for (const t of tvShowsToResolve) {
+       try {
+          const season = t.current_season;
+          const episode = t.current_episode;
+          
+          let eps: any = null;
+          try {
+             eps = await tmdbFetch(`/tv/${t.tmdb_id}/season/${season}`);
+          } catch (e) {
+             // Failed to fetch season
+          }
+          
+          let nextEp = eps?.episodes?.find((e: any) => e.episode_number === episode + 1);
+          let nextSeasonNum = season;
+          let details: any = null;
+          
+          if (!nextEp && eps) {
+             try {
+                 details = await tmdbFetch(`/tv/${t.tmdb_id}`);
+                 const nextSeason = details.seasons?.find((s: any) => s.season_number === season + 1);
+                 if (nextSeason) {
+                    nextSeasonNum = nextSeason.season_number;
+                    const nextEps: any = await tmdbFetch(`/tv/${t.tmdb_id}/season/${nextSeasonNum}`);
+                    nextEp = nextEps.episodes?.[0];
+                 }
+             } catch (e) {
+                 // Failed to fetch next season
+             }
+          }
+          
+          if (nextEp) {
+             t.current_season = nextSeasonNum;
+             t.current_episode = nextEp.episode_number;
+             
+             const airDate = nextEp.air_date ? new Date(nextEp.air_date) : null;
+             // Set time to midnight for future check
+             if (airDate) airDate.setHours(0, 0, 0, 0);
+             const today = new Date();
+             today.setHours(0, 0, 0, 0);
+             
+             const isFuture = airDate && airDate.getTime() > today.getTime();
+             
+             if (isFuture) {
+                t.media_type = 'awaiting';
+                t.episode_title = `Airs: ${nextEp.air_date} - ${nextEp.name}`;
+             } else {
+                t.episode_title = nextEp.name;
+             }
+          } else {
+             if (!details) {
+                 try {
+                     details = await tmdbFetch(`/tv/${t.tmdb_id}`);
+                 } catch (e) {
+                     // Keep details null if fails
+                 }
+             }
+             if (details && (details.status === "Ended" || details.status === "Canceled")) {
+                t.media_type = 'completed';
+             } else if (details && details.status) {
+                t.media_type = 'awaiting';
+                t.episode_title = 'Release date not yet confirmed';
+             } else {
+                // If API failed or no status, keep it as TV so it doesn't get lost
+                t.media_type = 'tv';
+                t.episode_title = `Episode ${t.current_episode}`;
+             }
+          }
+       } catch (e) {
+          console.error(e);
+       }
+       
+       resolvedTv++;
+       onProgress?.({ stage: "Advancing TV Shows to Next Episode...", current: resolvedTv, total: tvShowsToResolve.length });
+       await new Promise((r) => setTimeout(r, 150));
+    }
+    
+    const trackPayload = trackPayloadRaw;
 
     // Step 5: Database Injection
     onProgress?.({ stage: "Saving to database...", current: 0, total: 100 });
     
     // Explicit deduplication for core tables
-    const { data: existingWatch } = await getSupabase()
-        .from("watch_history")
-        .select("tmdb_id, season_number, episode_number, media_type")
-        .eq("user_id", user.id);
+    const existingWatch = [];
+    let fromWatch = 0;
+    while (true) {
+        const { data } = await getSupabase()
+            .from("watch_history")
+            .select("tmdb_id, season_number, episode_number, media_type")
+            .eq("user_id", user.id)
+            .range(fromWatch, fromWatch + 999);
+        if (!data || data.length === 0) break;
+        existingWatch.push(...data);
+        if (data.length < 1000) break;
+        fromWatch += 1000;
+    }
         
-    const existingWatchSet = new Set((existingWatch || []).map(r => 
+    const existingWatchSet = new Set(existingWatch.map(r => 
         r.media_type === "movie" ? `MOVIE_${r.tmdb_id}` : `TV_${r.tmdb_id}_${r.season_number}_${r.episode_number}`
     ));
     const finalWatchPayload = watchPayload.filter(r => {
@@ -463,10 +564,19 @@ export async function parseImportZip(
         return !existingWatchSet.has(k);
     });
 
-    const { data: existingTracked } = await getSupabase()
-        .from("tracked_shows")
-        .select("tmdb_id")
-        .eq("user_id", user.id);
+    const existingTracked = [];
+    let fromTracked = 0;
+    while (true) {
+        const { data } = await getSupabase()
+            .from("tracked_shows")
+            .select("tmdb_id")
+            .eq("user_id", user.id)
+            .range(fromTracked, fromTracked + 999);
+        if (!data || data.length === 0) break;
+        existingTracked.push(...data);
+        if (data.length < 1000) break;
+        fromTracked += 1000;
+    }
         
     const existingTrackedSet = new Set((existingTracked || []).map(r => r.tmdb_id));
     
@@ -497,22 +607,7 @@ export async function parseImportZip(
       }
     };
 
-    // Clean up watched movies from tracked_shows
-    if (watchedMovies.size > 0) {
-      const watchedMovieIds = Array.from(watchedMovies);
-      for (let i = 0; i < watchedMovieIds.length; i += 100) {
-        const batch = watchedMovieIds.slice(i, i + 100);
-        try {
-          await getSupabase().from("tracked_shows")
-            .delete()
-            .eq("user_id", user.id)
-            .in("tmdb_id", batch);
-        } catch (e) {
-          // ignore
-        }
-      }
-    }
-
+    
     await insertBatch("watch_history", finalWatchPayload);
     
     // Insert new tracked shows

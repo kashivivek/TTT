@@ -109,12 +109,28 @@ export default function MovieDetailsPage(props: { params: Promise<{ id: string }
         setIsWatched(true);
 
         if (isTracked) {
-          // Untrack it since it's now watched
+          // If it was tracked, update its media_type to completed_movie
           await db.from("tracked_shows")
-            .delete()
+            .update({
+              media_type: "completed_movie",
+              updated_at: new Date().toISOString()
+            })
             .eq("user_id", user.id)
             .eq("tmdb_id", tmdbId);
-          setIsTracked(false);
+        } else {
+          // If it wasn't tracked, insert it as completed_movie so it shows in Completed
+          await db.from("tracked_shows").insert({
+            user_id: user.id,
+            tmdb_id: tmdbId,
+            name: details.title,
+            media_type: "completed_movie",
+            backdrop_path: details.backdrop_path,
+            current_season: 0,
+            current_episode: 0,
+            episode_title: "",
+            updated_at: new Date().toISOString(),
+          });
+          setIsTracked(true);
         }
       }
     } catch (e) {

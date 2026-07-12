@@ -10,6 +10,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signUp: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error?: string }>;
+  updatePassword: (password: string) => Promise<{ error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -18,6 +20,8 @@ const AuthContext = createContext<AuthContextType>({
   signIn: async () => ({}),
   signUp: async () => ({}),
   signOut: async () => {},
+  resetPassword: async () => ({}),
+  updatePassword: async () => ({}),
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -64,8 +68,20 @@ export default function AuthProvider({
     await getSupabase().auth.signOut();
   };
 
+  const resetPassword = async (email: string) => {
+    const { error } = await getSupabase().auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/update-password`,
+    });
+    return { error: error?.message };
+  };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await getSupabase().auth.updateUser({ password });
+    return { error: error?.message };
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, resetPassword, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );

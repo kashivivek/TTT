@@ -96,7 +96,9 @@ export default function ShowCard({
         </div>
 
         {/* Right: check circle */}
-        <CheckCircle checked={checked} onCheck={handleCheck} />
+        {mediaType !== "awaiting" && (
+          <CheckCircle checked={checked} onCheck={handleCheck} />
+        )}
       </div>
     </div>
   );
