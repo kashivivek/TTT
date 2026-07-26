@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import {
   getTvDetails,
@@ -26,10 +26,12 @@ interface Episode {
   name: string;
   still_path: string | null;
   air_date: string | null;
+  overview?: string;
 }
 
-export default function ShowDetailsPage(props: { params: { id: string } }) {
-  const tmdbId = parseInt(props.params.id, 10);
+export default function ShowDetailsPage() {
+  const params = useParams();
+  const tmdbId = parseInt(params.id as string, 10);
 
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();

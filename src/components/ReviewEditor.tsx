@@ -32,7 +32,7 @@ export default function ReviewEditor({ tmdbId, mediaType }: ReviewEditorProps) {
 
       const { data: ratingData } = await db.from("user_ratings")
         .select("rating_value, review_text")
-        .eq("user_id", user.id)
+        .eq("user_id", user!.id)
         .eq("tmdb_id", tmdbId)
         .eq("media_type", mediaType)
         .single();

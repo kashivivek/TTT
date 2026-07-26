@@ -115,7 +115,7 @@ export default function ReviewsTab({ userId }: { userId: string }) {
                 "{review.review_text}"
               </p>
             )}
-            {!review.comment_text && !review.rating_value && (
+            {!review.review_text && !review.rating_value && (
                 <p className="text-text-muted text-sm italic">Rated</p>
             )}
           </div>
