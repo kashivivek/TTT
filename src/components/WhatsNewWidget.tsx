@@ -5,13 +5,14 @@ import { createPortal } from "react-dom";
 import { useAuth } from "@/components/AuthProvider";
 import { getSupabase } from "@/lib/supabase";
 
-const CURRENT_VERSION = "v2";
+const CURRENT_VERSION = "v3";
 
 export default function WhatsNewWidget() {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [hasChecked, setHasChecked] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [showPrevious, setShowPrevious] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -67,26 +68,50 @@ export default function WhatsNewWidget() {
               <span className="text-3xl">🗣️</span>
               <h2 className="text-2xl font-bold">You asked, we built!</h2>
             </div>
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div>
-                <h3 className="font-bold text-lg text-accent-yellow mb-2">Instant Dashboard & TV Time Imports</h3>
+                <h3 className="font-bold text-lg text-accent-yellow mb-1">AI-powered suggestions</h3>
                 <p className="text-sm text-text-muted leading-relaxed">
-                  We've completely rewritten our syncing engine! Your dashboard will now load instantaneously without any API lag. Plus, TV Time zip imports now intelligently advance all your shows behind the scenes and accurately track future air dates for Upcoming Episodes.
+                  Get personalized movie and TV recommendations powered by AI. Just describe what you're in the mood for!
                 </p>
               </div>
-              
+
               <div>
-                <h3 className="font-bold text-lg text-accent-yellow mb-2">Movie Tracking Fixes</h3>
+                <h3 className="font-bold text-lg text-accent-yellow mb-1">Where to watch</h3>
                 <p className="text-sm text-text-muted leading-relaxed">
-                  Finished movies now correctly stay in your tracked list under the "Completed" section instead of disappearing when marked as watched.
+                  Your preferred streaming providers show up instantly in the title view.
                 </p>
               </div>
-              
+
               <div>
-                <h3 className="font-bold text-lg text-accent-yellow mb-2">Season-Level Watching & Snooze</h3>
+                <h3 className="font-bold text-lg text-accent-yellow mb-1">Episode info</h3>
                 <p className="text-sm text-text-muted leading-relaxed">
-                  You can still mark an entire season as watched with a single click, and snooze the feedback popup for a week directly from the window!
+                  Episode details and upcoming air dates now appear more reliably with improved TV Time sync.
                 </p>
+              </div>
+
+              <div>
+                <h3 className="font-bold text-lg text-accent-yellow mb-1">Reviews & ratings</h3>
+                <p className="text-sm text-text-muted leading-relaxed">
+                  Your reviews and ratings save together and stay visible immediately after submitting.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <button
+                  onClick={() => setShowPrevious((prev) => !prev)}
+                  className="w-full flex items-center justify-between gap-3 text-left text-sm text-white font-semibold"
+                >
+                  <span>Previous Updates</span>
+                  <span className="text-accent-yellow">{showPrevious ? "Hide" : "Show"}</span>
+                </button>
+                {showPrevious && (
+                  <ul className="mt-4 text-sm text-text-muted space-y-2 list-disc list-inside">
+                    <li>Instant dashboard speed improvements and better TV Time import handling.</li>
+                    <li>Movie tracking now keeps completed titles in your tracked list.</li>
+                    <li>Season-level watched actions and feedback snooze support.</li>
+                  </ul>
+                )}
               </div>
             </div>
 

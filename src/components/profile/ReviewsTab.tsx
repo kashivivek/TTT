@@ -9,7 +9,7 @@ interface ReviewItem {
   id: string;
   tmdb_id: number;
   media_type: "movie" | "tv";
-  comment_text?: string;
+  review_text?: string;
   rating_value?: string;
   created_at: string;
   name: string;
@@ -25,13 +25,6 @@ export default function ReviewsTab({ userId }: { userId: string }) {
     async function load() {
       const supabase = getSupabase();
       
-      const { data: comments } = await supabase
-        .from("user_comments")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(20);
-        
       const { data: ratings } = await supabase
         .from("user_ratings")
         .select("*")
@@ -39,7 +32,7 @@ export default function ReviewsTab({ userId }: { userId: string }) {
         .order("created_at", { ascending: false })
         .limit(20);
 
-      const rawItems = [...(comments || []), ...(ratings || [])].sort(
+      const rawItems = [...(ratings || [])].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
 
@@ -71,11 +64,7 @@ export default function ReviewsTab({ userId }: { userId: string }) {
       const merged = new Map<string, ReviewItem>();
       for (const item of enriched.filter(x => x !== null) as ReviewItem[]) {
           const key = `${item.media_type}_${item.tmdb_id}`;
-          if (merged.has(key)) {
-              const existing = merged.get(key)!;
-              if (item.comment_text) existing.comment_text = item.comment_text;
-              if (item.rating_value) existing.rating_value = item.rating_value;
-          } else {
+          if (!merged.has(key)) {
               merged.set(key, item);
           }
       }
@@ -121,9 +110,9 @@ export default function ReviewsTab({ userId }: { userId: string }) {
                 ⭐ {review.rating_value}/10
               </div>
             )}
-            {review.comment_text && (
+            {review.review_text && (
               <p className="text-text-muted text-sm line-clamp-3 bg-bg-primary/50 p-2 rounded-lg italic">
-                "{review.comment_text}"
+                "{review.review_text}"
               </p>
             )}
             {!review.comment_text && !review.rating_value && (

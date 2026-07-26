@@ -38,8 +38,13 @@ export default function ProfilePage() {
   const [shows, setShows] = useState<TrackedShow[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
   const [displayName, setDisplayName] = useState("");
+  const [preferredCountry, setPreferredCountry] = useState("");
+  const [preferredLanguages, setPreferredLanguages] = useState("");
+  const [favoriteGenres, setFavoriteGenres] = useState("");
+  const [favoriteActors, setFavoriteActors] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [savingName, setSavingName] = useState(false);
+  const [savingPreferences, setSavingPreferences] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [activeTab, setActiveTab] = useState<"history" | "favorites" | "reviews" | "badges">("history");
 
@@ -165,6 +170,31 @@ export default function ProfilePage() {
         const movieDays = Math.floor((movieTotalHours % (24 * 30)) / 24);
         const movieHours = movieTotalHours % 24;
 
+        const { data: preferenceData } = await supabase
+          .from("user_preferences")
+          .select("watch_country, preferred_languages, favorite_genres, favorite_actors")
+          .eq("user_id", user.id)
+          .single();
+
+        if (preferenceData) {
+          setPreferredCountry(preferenceData.watch_country || "");
+          setPreferredLanguages(
+            Array.isArray(preferenceData.preferred_languages)
+              ? preferenceData.preferred_languages.join(", ")
+              : ""
+          );
+          setFavoriteGenres(
+            Array.isArray(preferenceData.favorite_genres)
+              ? preferenceData.favorite_genres.join(", ")
+              : ""
+          );
+          setFavoriteActors(
+            Array.isArray(preferenceData.favorite_actors)
+              ? preferenceData.favorite_actors.join(", ")
+              : ""
+          );
+        }
+
         setStats({
           totalShows: showCount || 0,
           totalEpisodes: tvEps || 0,
@@ -207,6 +237,42 @@ export default function ProfilePage() {
     }
     setSavingName(false);
     setEditingName(false);
+  };
+
+  const handleSavePreferences = async () => {
+    if (!user) return;
+    setSavingPreferences(true);
+
+    const languages = preferredLanguages
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const genres = favoriteGenres
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const actors = favoriteActors
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    try {
+      await getSupabase().from("user_preferences").upsert(
+        {
+          user_id: user.id,
+          watch_country: preferredCountry || null,
+          preferred_languages: languages,
+          favorite_genres: genres,
+          favorite_actors: actors,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+    } catch (err) {
+      console.error("Failed to save preferences", err);
+    } finally {
+      setSavingPreferences(false);
+    }
   };
 
   const handleImport = async (file: File) => {
@@ -480,6 +546,71 @@ export default function ProfilePage() {
               )}
             </div>
           )}
+        </section>
+
+        {/* Preferences section */}
+        <section className="mt-6 space-y-4">
+          <div className="bg-card-surface rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-text-primary">Preferences</h2>
+                <p className="text-text-muted text-sm">Save your default country, languages, genres, and actors.</p>
+              </div>
+              <button
+                onClick={handleSavePreferences}
+                disabled={savingPreferences}
+                className="rounded-full bg-accent-yellow px-4 py-2 text-sm font-bold text-bg-primary hover:brightness-110 disabled:opacity-70"
+              >
+                {savingPreferences ? "Saving..." : "Save Preferences"}
+              </button>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-text-muted text-xs uppercase tracking-[0.18em] mb-2 block">Preferred country</span>
+                <input
+                  type="text"
+                  value={preferredCountry}
+                  onChange={(e) => setPreferredCountry(e.target.value)}
+                  placeholder="US"
+                  className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-text-primary"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-text-muted text-xs uppercase tracking-[0.18em] mb-2 block">Preferred languages</span>
+                <input
+                  type="text"
+                  value={preferredLanguages}
+                  onChange={(e) => setPreferredLanguages(e.target.value)}
+                  placeholder="English, Spanish"
+                  className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-text-primary"
+                />
+              </label>
+
+              <label className="block sm:col-span-2">
+                <span className="text-text-muted text-xs uppercase tracking-[0.18em] mb-2 block">Favorite genres</span>
+                <input
+                  type="text"
+                  value={favoriteGenres}
+                  onChange={(e) => setFavoriteGenres(e.target.value)}
+                  placeholder="Drama, Comedy, Sci-Fi"
+                  className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-text-primary"
+                />
+              </label>
+
+              <label className="block sm:col-span-2">
+                <span className="text-text-muted text-xs uppercase tracking-[0.18em] mb-2 block">Favorite actors</span>
+                <input
+                  type="text"
+                  value={favoriteActors}
+                  onChange={(e) => setFavoriteActors(e.target.value)}
+                  placeholder="Keanu Reeves, Zendaya"
+                  className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-text-primary"
+                />
+              </label>
+            </div>
+          </div>
         </section>
 
         {/* Account actions */}

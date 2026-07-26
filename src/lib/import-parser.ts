@@ -170,13 +170,23 @@ export async function parseImportZip(
         const series_name = row["series_name"];
         const title = movie_name || series_name;
         if (title) {
+          const rawVoteKey = row["vote_key"]?.trim();
+          const rawRating = row["rating"]?.trim();
+          const isNumericVoteKey = typeof rawVoteKey === "string" && /^[0-9]+(?:\.[0-9]+)?$/.test(rawVoteKey);
+          const isNumericRating = typeof rawRating === "string" && /^[0-9]+(?:\.[0-9]+)?$/.test(rawRating);
+          const rating_value = isNumericVoteKey
+            ? rawVoteKey
+            : isNumericRating
+            ? rawRating
+            : rawVoteKey || rawRating;
+
           records.push({
             title,
             media_type: movie_name ? "movie" : "tv",
             season_number: parseInt(row["season_number"]) || 1,
             episode_number: parseInt(row["episode_number"]) || 1,
             type: "rating",
-            rating_value: row["vote_key"] || row["rating"],
+            rating_value,
           });
         }
       }

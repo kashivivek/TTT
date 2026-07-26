@@ -12,7 +12,9 @@ export const metadata: Metadata = {
     "Track your TV shows and movies. Migrate your watch history and never lose progress. A modern tracker for binge watchers and screen time enthusiasts.",
   manifest: "/manifest.json",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
   },
 };
 

@@ -3,12 +3,22 @@
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { getMovieDetails, backdropUrl, posterUrl } from "@/lib/tmdb";
+import {
+  getMovieDetails,
+  getMovieWatchProviders,
+  backdropUrl,
+  posterUrl,
+  logoUrl,
+  sortWatchProviderRegions,
+} from "@/lib/tmdb";
 import { getSupabase } from "@/lib/supabase";
 import BottomNav from "@/components/BottomNav";
 import UserReviewWidget from "@/components/UserReviewWidget";
+import WatchCountrySelector from "@/components/WatchCountrySelector";
+import ReviewEditor from "@/components/ReviewEditor";
+import CommunityTab from "@/components/CommunityTab";
 
-type Tab = "about" | "cast";
+type Tab = "about" | "cast" | "community";
 
 export default function MovieDetailsPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
@@ -18,13 +28,51 @@ export default function MovieDetailsPage(props: { params: Promise<{ id: string }
   const router = useRouter();
 
   const [details, setDetails] = useState<any>(null);
+  const [providers, setProviders] = useState<any | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [preferredCountry, setPreferredCountry] = useState<string | null>(null);
+  const [isSavingCountry, setIsSavingCountry] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("about");
   const [isTracked, setIsTracked] = useState(false);
   const [isWatched, setIsWatched] = useState(false);
 
   useEffect(() => {
     getMovieDetails(tmdbId).then(setDetails).catch(console.error);
+    getMovieWatchProviders(tmdbId).then(setProviders).catch(() => setProviders(null));
   }, [tmdbId]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const loadPreference = async () => {
+      const db = getSupabase();
+      const { data, error } = await db
+        .from("user_preferences")
+        .select("watch_country")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!error && data?.watch_country) {
+        setPreferredCountry(data.watch_country);
+      }
+    };
+
+    loadPreference().catch(console.error);
+  }, [user]);
+
+  useEffect(() => {
+    if (!providers) return;
+    const availableRegions = Object.keys(providers.results || {});
+    const defaultCountry = preferredCountry && availableRegions.includes(preferredCountry)
+      ? preferredCountry
+      : availableRegions.includes("US")
+        ? "US"
+        : availableRegions[0] || null;
+
+    if (defaultCountry && defaultCountry !== selectedCountry) {
+      setSelectedCountry(defaultCountry);
+    }
+  }, [providers, preferredCountry, selectedCountry]);
 
   // Load tracking status and watched history
   useEffect(() => {
@@ -59,6 +107,28 @@ export default function MovieDetailsPage(props: { params: Promise<{ id: string }
     
     loadUserData();
   }, [user, tmdbId]);
+
+  const handleCountryChange = async (country: string) => {
+    setSelectedCountry(country);
+    if (!user) return;
+
+    setIsSavingCountry(true);
+    try {
+      await getSupabase().from("user_preferences").upsert(
+        {
+          user_id: user.id,
+          watch_country: country,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+      setPreferredCountry(country);
+    } catch (err) {
+      console.error("Failed to save watch country", err);
+    } finally {
+      setIsSavingCountry(false);
+    }
+  };
 
   const handleTrackShow = async () => {
     if (!user || isTracked || !details) return;
@@ -197,45 +267,108 @@ export default function MovieDetailsPage(props: { params: Promise<{ id: string }
 
       <div className="max-w-5xl mx-auto px-4 mt-6">
         {/* Tabs */}
-        <div className="flex border-b border-card-surface mb-6">
-          <button
-            onClick={() => setActiveTab("about")}
-            className={`pb-3 px-6 font-bold text-sm tracking-wide transition-colors ${
-              activeTab === "about" ? "border-b-2 border-accent-yellow text-white" : "text-text-muted hover:text-white"
-            }`}
-          >
-            ABOUT
-          </button>
-          <button
-            onClick={() => setActiveTab("cast")}
-            className={`pb-3 px-6 font-bold text-sm tracking-wide transition-colors ${
-              activeTab === "cast" ? "border-b-2 border-accent-yellow text-white" : "text-text-muted hover:text-white"
-            }`}
-          >
-            CAST
-          </button>
+        <div className="flex border-b border-card-surface mb-6 overflow-x-auto">
+          {(["about", "cast", "community"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-3 px-6 font-bold text-sm tracking-wide transition-colors ${
+                activeTab === tab ? "border-b-2 border-accent-yellow text-white" : "text-text-muted hover:text-white"
+              }`}
+            >
+              {tab.toUpperCase()}
+            </button>
+          ))}
         </div>
 
         {/* Tab Content */}
         {activeTab === "about" && (
         <div className="space-y-6">
-          <UserReviewWidget tmdbId={tmdbId} mediaType="movie" />
-          
-          <div className="bg-card-surface p-6 rounded-xl">
-            <h2 className="text-xl font-bold mb-4">Movie Info</h2>
-            <div className="flex gap-4 items-start">
-              {details.poster_path && (
-                <img src={posterUrl(details.poster_path)} alt="Poster" className="w-24 rounded-lg hidden sm:block" />
-              )}
-              <div>
-                <p className="text-text-muted text-sm mb-2">
-                  {details.release_date ? details.release_date.split("-")[0] : ""} • {details.genres?.map((g: any) => g.name).join(", ")}
-                </p>
-                <p className="text-sm leading-relaxed">{details.overview || "No overview available."}</p>
+          <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+            <div className="bg-card-surface p-6 rounded-xl">
+              <h2 className="text-xl font-bold mb-4">About the Movie</h2>
+              <div className="flex gap-4 items-start">
+                {details.poster_path && (
+                  <img src={posterUrl(details.poster_path)} alt="Poster" className="w-24 rounded-lg hidden sm:block" />
+                )}
+                <div>
+                  <p className="text-text-muted text-sm mb-2">
+                    {details.release_date ? details.release_date.split("-")[0] : ""} • {details.genres?.map((g: any) => g.name).join(", ")}
+                  </p>
+                  <p className="text-sm leading-relaxed">{details.overview || "No overview available."}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-card-surface p-6 rounded-xl">
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <h2 className="text-xl font-bold">Reviews</h2>
+                <span className="text-sm text-text-muted">Optional</span>
+              </div>
+              <div className="space-y-4">
+                <ReviewEditor tmdbId={tmdbId} mediaType="movie" />
               </div>
             </div>
           </div>
-          
+
+          <div className="bg-card-surface p-6 rounded-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-xl font-bold">Where to Watch</h2>
+                <p className="text-sm text-text-muted">Your preferred region is shown here.</p>
+              </div>
+              <WatchCountrySelector
+                providers={providers}
+                value={selectedCountry}
+                onChange={handleCountryChange}
+              />
+            </div>
+            {!providers ? (
+              <p className="text-text-muted">Loading providers...</p>
+            ) : Object.keys(providers.results || {}).length === 0 ? (
+              <p className="text-text-muted">No provider data available.</p>
+            ) : (
+              <>
+                {selectedCountry && providers.results[selectedCountry] ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-text-muted mb-2">
+                      Showing providers for <strong>{selectedCountry}</strong>{isSavingCountry ? " — saving..." : ""}
+                    </p>
+                    <div className="grid gap-4 lg:grid-cols-3">
+                      {( ["flatrate", "rent", "buy"] as const ).map((tier) => {
+                        const items = providers.results[selectedCountry][tier];
+                        if (!items || items.length === 0) return null;
+                        return (
+                          <div key={tier} className="rounded-2xl border border-white/10 bg-black/30 p-3">
+                            <p className="text-xs uppercase tracking-[0.2em] text-text-muted mb-3">{tier === "flatrate" ? "Streaming" : tier === "rent" ? "Rent" : "Buy"}</p>
+                            <div className="grid gap-2">
+                              {items.map((provider: any) => (
+                                <a
+                                  key={provider.provider_id}
+                                  href={providers.results[selectedCountry]?.link || "#"}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-xl transition hover:bg-white/10"
+                                >
+                                  {provider.logo_path ? (
+                                    <img src={logoUrl(provider.logo_path)} alt={provider.provider_name} className="w-6 h-6 object-contain" />
+                                  ) : null}
+                                  <span className="text-xs">{provider.provider_name}</span>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-text-muted">Selected country has no provider data.</p>
+                )}
+              </>
+            )}
+          </div>
+
           <div className="bg-card-surface p-6 rounded-xl flex items-center justify-between">
             <div>
                <h3 className="font-bold text-lg">Mark as Watched</h3>
@@ -270,6 +403,12 @@ export default function MovieDetailsPage(props: { params: Promise<{ id: string }
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {activeTab === "community" && (
+          <div className="space-y-6">
+            <CommunityTab tmdbId={tmdbId} mediaType="movie" />
           </div>
         )}
       </div>

@@ -1,14 +1,25 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { getTvDetails, getSeasonEpisodes, backdropUrl, posterUrl } from "@/lib/tmdb";
+import {
+  getTvDetails,
+  getSeasonEpisodes,
+  getTvWatchProviders,
+  backdropUrl,
+  posterUrl,
+  logoUrl,
+  sortWatchProviderRegions,
+} from "@/lib/tmdb";
 import { getSupabase } from "@/lib/supabase";
 import BottomNav from "@/components/BottomNav";
 import UserReviewWidget from "@/components/UserReviewWidget";
+import WatchCountrySelector from "@/components/WatchCountrySelector";
+import ReviewEditor from "@/components/ReviewEditor";
+import CommunityTab from "@/components/CommunityTab";
 
-type Tab = "about" | "episodes" | "cast";
+type Tab = "about" | "episodes" | "cast" | "community";
 
 interface Episode {
   episode_number: number;
@@ -17,14 +28,17 @@ interface Episode {
   air_date: string | null;
 }
 
-export default function ShowDetailsPage(props: { params: Promise<{ id: string }> }) {
-  const params = use(props.params);
-  const tmdbId = parseInt(params.id, 10);
+export default function ShowDetailsPage(props: { params: { id: string } }) {
+  const tmdbId = parseInt(props.params.id, 10);
 
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [details, setDetails] = useState<any>(null);
+  const [providers, setProviders] = useState<any | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [preferredCountry, setPreferredCountry] = useState<string | null>(null);
+  const [isSavingCountry, setIsSavingCountry] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("about");
   const [isTracked, setIsTracked] = useState(false);
   const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(new Set());
@@ -37,7 +51,41 @@ export default function ShowDetailsPage(props: { params: Promise<{ id: string }>
   // Load basic details
   useEffect(() => {
     getTvDetails(tmdbId).then(setDetails).catch(console.error);
+    getTvWatchProviders(tmdbId).then(setProviders).catch(() => setProviders(null));
   }, [tmdbId]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const loadPreference = async () => {
+      const db = getSupabase();
+      const { data, error } = await db
+        .from("user_preferences")
+        .select("watch_country")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!error && data?.watch_country) {
+        setPreferredCountry(data.watch_country);
+      }
+    };
+
+    loadPreference().catch(console.error);
+  }, [user]);
+
+  useEffect(() => {
+    if (!providers) return;
+    const availableRegions = Object.keys(providers.results || {});
+    const defaultCountry = preferredCountry && availableRegions.includes(preferredCountry)
+      ? preferredCountry
+      : availableRegions.includes("US")
+        ? "US"
+        : availableRegions[0] || null;
+
+    if (defaultCountry && defaultCountry !== selectedCountry) {
+      setSelectedCountry(defaultCountry);
+    }
+  }, [providers, preferredCountry, selectedCountry]);
 
   // Load tracking status and watched history
   useEffect(() => {
@@ -71,6 +119,28 @@ export default function ShowDetailsPage(props: { params: Promise<{ id: string }>
     
     loadUserData();
   }, [user, tmdbId]);
+
+  const handleCountryChange = async (country: string) => {
+    setSelectedCountry(country);
+    if (!user) return;
+
+    setIsSavingCountry(true);
+    try {
+      await getSupabase().from("user_preferences").upsert(
+        {
+          user_id: user.id,
+          watch_country: country,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+      setPreferredCountry(country);
+    } catch (err) {
+      console.error("Failed to save watch country", err);
+    } finally {
+      setIsSavingCountry(false);
+    }
+  };
 
   const handleTrackShow = async () => {
     if (!user || !details) return;
@@ -322,40 +392,26 @@ export default function ShowDetailsPage(props: { params: Promise<{ id: string }>
 
       <div className="max-w-5xl mx-auto px-4 mt-6">
         {/* Tabs */}
-        <div className="flex border-b border-card-surface mb-6">
-          <button
-            onClick={() => setActiveTab("about")}
-            className={`pb-3 px-6 font-bold text-sm tracking-wide transition-colors ${
-              activeTab === "about" ? "border-b-2 border-accent-yellow text-white" : "text-text-muted hover:text-white"
-            }`}
-          >
-            ABOUT
-          </button>
-          <button
-            onClick={() => setActiveTab("episodes")}
-            className={`pb-3 px-6 font-bold text-sm tracking-wide transition-colors ${
-              activeTab === "episodes" ? "border-b-2 border-accent-yellow text-white" : "text-text-muted hover:text-white"
-            }`}
-          >
-            EPISODES
-          </button>
-          <button
-            onClick={() => setActiveTab("cast")}
-            className={`pb-3 px-6 font-bold text-sm tracking-wide transition-colors ${
-              activeTab === "cast" ? "border-b-2 border-accent-yellow text-white" : "text-text-muted hover:text-white"
-            }`}
-          >
-            CAST
-          </button>
+        <div className="flex border-b border-card-surface mb-6 overflow-x-auto">
+          {(["about", "episodes", "cast", "community"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-3 px-6 font-bold text-sm tracking-wide transition-colors ${
+                activeTab === tab ? "border-b-2 border-accent-yellow text-white" : "text-text-muted hover:text-white"
+              }`}
+            >
+              {tab.toUpperCase()}
+            </button>
+          ))}
         </div>
 
         {/* Tab Content */}
         {activeTab === "about" && (
         <div className="space-y-6">
-          <UserReviewWidget tmdbId={tmdbId} mediaType="tv" />
-          
-          <div className="bg-card-surface p-6 rounded-xl">
-              <h2 className="text-xl font-bold mb-4">Show Info</h2>
+          <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+            <div className="bg-card-surface p-6 rounded-xl">
+              <h2 className="text-xl font-bold mb-4">About the Show</h2>
               <div className="flex gap-4 items-start">
                 {details.poster_path && (
                   <img src={posterUrl(details.poster_path)} alt="Poster" className="w-24 rounded-lg hidden sm:block" />
@@ -368,7 +424,76 @@ export default function ShowDetailsPage(props: { params: Promise<{ id: string }>
                 </div>
               </div>
             </div>
+
+            <div className="bg-card-surface p-6 rounded-xl">
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <h2 className="text-xl font-bold">Reviews</h2>
+                <span className="text-sm text-text-muted">Optional</span>
+              </div>
+              <div className="space-y-4">
+                <ReviewEditor tmdbId={tmdbId} mediaType="tv" />
+              </div>
+            </div>
           </div>
+
+          <div className="bg-card-surface p-6 rounded-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-xl font-bold">Where to Watch</h2>
+                <p className="text-sm text-text-muted">Your preferred region is shown here.</p>
+              </div>
+              <WatchCountrySelector
+                providers={providers}
+                value={selectedCountry}
+                onChange={handleCountryChange}
+              />
+            </div>
+            {!providers ? (
+              <p className="text-text-muted">Loading providers...</p>
+            ) : Object.keys(providers.results || {}).length === 0 ? (
+              <p className="text-text-muted">No provider data available.</p>
+            ) : (
+              <>
+                {selectedCountry && providers.results[selectedCountry] ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-text-muted mb-2">
+                      Showing providers for <strong>{selectedCountry}</strong>{isSavingCountry ? " — saving..." : ""}
+                    </p>
+                    <div className="grid gap-4 lg:grid-cols-3">
+                      {( ["flatrate", "rent", "buy"] as const ).map((tier) => {
+                        const items = providers.results[selectedCountry][tier];
+                        if (!items || items.length === 0) return null;
+                        return (
+                          <div key={tier} className="rounded-2xl border border-white/10 bg-black/30 p-3">
+                            <p className="text-xs uppercase tracking-[0.2em] text-text-muted mb-3">{tier === "flatrate" ? "Streaming" : tier === "rent" ? "Rent" : "Buy"}</p>
+                            <div className="grid gap-2">
+                              {items.map((provider: any) => (
+                                <a
+                                  key={provider.provider_id}
+                                  href={providers.results[selectedCountry]?.link || "#"}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-xl transition hover:bg-white/10"
+                                >
+                                  {provider.logo_path ? (
+                                    <img src={logoUrl(provider.logo_path)} alt={provider.provider_name} className="w-6 h-6 object-contain" />
+                                  ) : null}
+                                  <span className="text-xs">{provider.provider_name}</span>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-text-muted">Selected country has no provider data.</p>
+                )}
+              </>
+            )}
+          </div>
+        </div>
         )}
 
         {activeTab === "episodes" && (
@@ -411,23 +536,26 @@ export default function ShowDetailsPage(props: { params: Promise<{ id: string }>
                         const isWatched = watchedEpisodes.has(key);
                         
                         return (
-                          <div key={ep.episode_number} className="flex items-center px-5 py-3 hover:bg-white/5 transition-colors group">
-                            <div className="flex-1">
-                              <p className="font-semibold text-sm group-hover:text-white transition-colors">
-                                {ep.episode_number}. {ep.name}
-                              </p>
-                              {ep.air_date && <p className="text-xs text-text-muted mt-1">{ep.air_date}</p>}
+                          <div key={ep.episode_number} className="px-5 py-3 hover:bg-white/5 transition-colors group rounded-xl">
+                            <div className="flex items-start gap-4">
+                              <div className="flex-1">
+                                <p className="font-semibold text-sm group-hover:text-white transition-colors">
+                                  {ep.episode_number}. {ep.name}
+                                </p>
+                                {ep.air_date && <p className="text-xs text-text-muted mt-1">{ep.air_date}</p>}
+                                {ep.overview && <p className="text-xs text-text-muted mt-2 line-clamp-3">{ep.overview}</p>}
+                              </div>
+                              <button
+                                onClick={() => toggleEpisode(season.season_number, ep.episode_number)}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                                  isWatched 
+                                    ? "bg-accent-yellow text-black" 
+                                    : "bg-white/10 hover:bg-white/20 text-transparent hover:text-white"
+                                }`}
+                              >
+                                ✓
+                              </button>
                             </div>
-                            <button
-                              onClick={() => toggleEpisode(season.season_number, ep.episode_number)}
-                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                                isWatched 
-                                  ? "bg-accent-yellow text-black" 
-                                  : "bg-white/10 hover:bg-white/20 text-transparent hover:text-white"
-                              }`}
-                            >
-                              ✓
-                            </button>
                           </div>
                         );
                       })
@@ -455,6 +583,10 @@ export default function ShowDetailsPage(props: { params: Promise<{ id: string }>
               </div>
             ))}
           </div>
+        )}
+
+        {activeTab === "community" && (
+          <CommunityTab tmdbId={tmdbId} mediaType="tv" />
         )}
       </div>
       

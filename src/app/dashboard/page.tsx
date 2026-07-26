@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
@@ -10,7 +10,7 @@ import SearchAutocomplete from "@/components/SearchAutocomplete";
 import BottomNav from "@/components/BottomNav";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import WhatsNewWidget from "@/components/WhatsNewWidget";
-import { getTvDetails, getSeasonEpisodes, getTrendingTv, getTvRecommendations, getMovieDetails } from "@/lib/tmdb";
+import { getTvDetails, getSeasonEpisodes, getTrendingAll, getMovieDetails } from "@/lib/tmdb";
 import { getSupabase } from "@/lib/supabase";
 
 interface TrackedShowState {
@@ -22,11 +22,6 @@ interface TrackedShowState {
   current_episode: number;
   episode_title: string;
   updated_at?: string;
-}
-
-interface ExploreContent {
-  trending: any[];
-  recommendations: any[];
 }
 
 function DashboardContent() {
@@ -41,8 +36,13 @@ function DashboardContent() {
   const [lastWatchedAt, setLastWatchedAt] = useState<Map<number, Date>>(new Map());
   const [refreshKey, setRefreshKey] = useState(0);
   
-  const [exploreData, setExploreData] = useState<ExploreContent>({ trending: [], recommendations: [] });
+  const [trendingAll, setTrendingAll] = useState<any[]>([]);
+  const [aiQuery, setAiQuery] = useState("");
+  const [tvTimeQuery, setTvTimeQuery] = useState("");
+  const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [loadingExplore, setLoadingExplore] = useState(false);
+  const [searchingAi, setSearchingAi] = useState(false);
+  const [aiCacheLoaded, setAiCacheLoaded] = useState(false);
   
   const [upcomingMovies, setUpcomingMovies] = useState<any[]>([]);
   const [unreleasedMovieIds, setUnreleasedMovieIds] = useState<Set<number>>(new Set());
@@ -128,30 +128,55 @@ function DashboardContent() {
 
   // Load Explore Data
   useEffect(() => {
-    if (tab === "explore" && exploreData.trending.length === 0 && !loadingExplore) {
-      const loadExplore = async () => {
-        setLoadingExplore(true);
-        try {
-          const trendingRes = await getTrendingTv();
-          
-          let recsRes: any = { results: [] };
-          if (shows.length > 0) {
-             const randomShow = shows[Math.floor(Math.random() * shows.length)];
-             recsRes = await getTvRecommendations(randomShow.tmdb_id);
-          }
-          
-          setExploreData({
-            trending: trendingRes.results.slice(0, 6),
-            recommendations: recsRes.results.slice(0, 6)
-          });
-        } catch {
-          // fail silently
+    if (tab !== "explore") return;
+    if (trendingAll.length > 0 || loadingExplore) return;
+
+    const loadExplore = async () => {
+      setLoadingExplore(true);
+      try {
+        const trendingRes = await getTrendingAll();
+        const filtered = (trendingRes.results || [])
+          .filter((item) => item.media_type === "tv" || item.media_type === "movie")
+          .slice(0, 12);
+
+        setTrendingAll(filtered);
+      } catch (err) {
+        console.error("Failed to load explore trending", err);
+      }
+      setLoadingExplore(false);
+    };
+    loadExplore();
+  }, [tab, trendingAll.length, loadingExplore]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const cache = window.localStorage.getItem("ttt-ai-suggestions");
+    if (cache) {
+      try {
+        const parsed = JSON.parse(cache);
+        if (typeof parsed.query === "string") {
+          setTvTimeQuery(parsed.query);
+          setAiQuery(parsed.query);
         }
-        setLoadingExplore(false);
-      };
-      loadExplore();
+        if (Array.isArray(parsed.suggestions)) {
+          setAiSuggestions(parsed.suggestions);
+        }
+      } catch {
+        // ignore invalid cache
+      }
     }
-  }, [tab, shows, exploreData.trending.length, loadingExplore]);
+    setAiCacheLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !aiCacheLoaded) return;
+
+    const cachePayload = {
+      query: tvTimeQuery,
+      suggestions: aiSuggestions,
+    };
+    window.localStorage.setItem("ttt-ai-suggestions", JSON.stringify(cachePayload));
+  }, [aiCacheLoaded, tvTimeQuery, aiSuggestions]);
 
   // Load Upcoming Movies from Tracked Movies
   useEffect(() => {
@@ -199,6 +224,55 @@ function DashboardContent() {
     } catch {
       // silently fail
     }
+  };
+
+  const prioritizeResults = (query: string, items: any[]) => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return items;
+
+    const exactMatches = items.filter((item) => {
+      const title = (item.title || item.name || "").toLowerCase();
+      return title === normalizedQuery;
+    });
+    const partialMatches = items.filter((item) => {
+      const title = (item.title || item.name || "").toLowerCase();
+      return title.includes(normalizedQuery) && title !== normalizedQuery;
+    });
+    const others = items.filter((item) => {
+      const title = (item.title || item.name || "").toLowerCase();
+      return !title.includes(normalizedQuery);
+    });
+
+    return [...exactMatches, ...partialMatches, ...others].slice(0, 12);
+  };
+
+  const handleAiSearch = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = aiQuery.trim();
+    if (!query || searchingAi) return;
+
+    setSearchingAi(true);
+    setTvTimeQuery(query);
+    setAiSuggestions([]);
+
+    try {
+      const response = await fetch("/api/groq-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+      const data = await response.json();
+      if (data.suggestions && Array.isArray(data.suggestions)) {
+        setAiSuggestions(prioritizeResults(query, data.suggestions));
+      } else {
+        setAiSuggestions([]);
+      }
+    } catch (err) {
+      console.error("AI suggestions failed", err);
+      setAiSuggestions([]);
+    }
+
+    setSearchingAi(false);
   };
 
 
@@ -418,41 +492,101 @@ function DashboardContent() {
       <div className="max-w-5xl mx-auto px-4 pt-6 pb-6">
         
         {tab === "explore" && (
-          <div>
-            <h2 className="text-xl font-bold text-text-primary mb-4">Trending</h2>
-            {loadingExplore ? (
-              <div className="w-6 h-6 border-2 border-accent-yellow border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-                {exploreData.trending.map((show) => (
-                  <div key={show.id} onClick={() => router.push(`/shows/${show.id}`)} className="cursor-pointer hover:ring-2 hover:ring-accent-yellow rounded-xl overflow-hidden bg-card-surface">
-                    {show.backdrop_path && (
-                      <img src={`https://image.tmdb.org/t/p/w500${show.backdrop_path}`} alt={show.name} className="w-full h-24 object-cover opacity-80 hover:opacity-100" />
-                    )}
-                    <div className="p-3">
-                      <h3 className="font-bold text-sm truncate">{show.name}</h3>
-                    </div>
+          <div className="space-y-8">
+            <div className="bg-card-surface p-6 rounded-3xl border border-white/10 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-bold text-text-primary">TV Time Suggestions</h2>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs text-text-muted">
+                    <span>✨</span>
+                    <span>AI Suggestions</span>
                   </div>
-                ))}
+                </div>
+              </div>
+              <p className="text-text-muted text-sm mt-1">Ask for a mood, genre, or vibe and get recommendations from trending movies and TV shows.</p>
+
+              <form onSubmit={handleAiSearch} className="space-y-4">
+                <textarea
+                  value={aiQuery}
+                  onChange={(e) => setAiQuery(e.target.value)}
+                  rows={3}
+                  placeholder="I want to watch something horror and binge-worthy..."
+                  className="w-full rounded-3xl border border-white/10 bg-bg-primary px-4 py-3 text-text-primary placeholder:text-text-muted outline-none focus:border-accent-yellow"
+                />
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <p className="text-xs text-text-muted">Try prompts like “horror thrillers”, “feel-good comedies”, or “new TV shows with suspense”.</p>
+                  <button
+                    type="submit"
+                    className="rounded-full bg-accent-yellow px-5 py-2.5 font-bold text-bg-primary hover:brightness-110 disabled:opacity-70"
+                    disabled={searchingAi}
+                  >
+                    {searchingAi ? "Finding suggestions..." : "Get TV Time Suggestions"}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {searchingAi && (
+              <div className="flex items-center gap-3 text-text-muted">
+                <div className="w-5 h-5 border-2 border-accent-yellow border-t-transparent rounded-full animate-spin" />
+                <span>Getting recommendations from AI...</span>
               </div>
             )}
-            
-            {exploreData.recommendations.length > 0 && (
-              <>
-                <h2 className="text-xl font-bold text-text-primary mb-4">Since You Watched...</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-                  {exploreData.recommendations.map((show) => (
-                    <div key={show.id} onClick={() => router.push(`/shows/${show.id}`)} className="cursor-pointer hover:ring-2 hover:ring-accent-yellow rounded-xl overflow-hidden bg-card-surface">
-                      {show.backdrop_path && (
-                        <img src={`https://image.tmdb.org/t/p/w500${show.backdrop_path}`} alt={show.name} className="w-full h-24 object-cover opacity-80 hover:opacity-100" />
-                      )}
-                      <div className="p-3">
-                        <h3 className="font-bold text-sm truncate">{show.name}</h3>
+
+            {tvTimeQuery && aiSuggestions.length === 0 && !searchingAi && (
+              <div className="text-sm text-text-muted">No AI suggestions matched that prompt. Showing trending picks below.</div>
+            )}
+
+            {(aiSuggestions.length > 0 ? aiSuggestions : trendingAll).length > 0 ? (
+              <div>
+                <h3 className="text-xl font-bold text-text-primary mb-4">
+                  {aiSuggestions.length > 0 ? `Suggestions for “${tvTimeQuery}”` : "Trending on TV Time"}
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {(aiSuggestions.length > 0 ? aiSuggestions : trendingAll).map((item: any) => {
+                    const title = item.title || item.name || "Untitled";
+                    const route = item.media_type === "movie" ? `/movies/${item.id}` : `/shows/${item.id}`;
+
+                    return (
+                      <div
+                        key={`${item.media_type}-${item.id}`}
+                        onClick={() => router.push(route)}
+                        className="cursor-pointer rounded-3xl overflow-hidden bg-card-surface hover:ring-2 hover:ring-accent-yellow/50 transition-all"
+                      >
+                        {item.backdrop_path && (
+                          <img
+                            src={`https://image.tmdb.org/t/p/w500${item.backdrop_path}`}
+                            alt={title}
+                            className="w-full h-44 object-cover opacity-90 hover:opacity-100"
+                          />
+                        )}
+                        <div className="p-4">
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <span className="text-accent-yellow text-xs uppercase tracking-[0.2em] font-semibold">
+                              {item.media_type === "movie" ? "Movie" : "TV"}
+                            </span>
+                            {item.release_date || item.first_air_date ? (
+                              <span className="text-[10px] text-text-muted uppercase">
+                                {new Date(item.release_date || item.first_air_date).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                })}
+                              </span>
+                            ) : null}
+                          </div>
+                          <h3 className="text-white font-bold text-base leading-tight mb-2 truncate">{title}</h3>
+                          <p className="text-text-muted text-sm line-clamp-3">{item.overview || "No description available."}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              </>
+              </div>
+            ) : (
+              !loadingExplore && (
+                <div className="text-text-muted">No suggestions to show yet. Try a different prompt or check back later.</div>
+              )
             )}
           </div>
         )}

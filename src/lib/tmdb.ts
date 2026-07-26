@@ -10,6 +10,51 @@ export function posterUrl(path: string | null, size = "w342"): string {
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
 }
 
+export interface TMDbProviderItem {
+  provider_id: number;
+  provider_name: string;
+  logo_path: string | null;
+}
+
+export interface TMDbRegionWatchProviders {
+  link: string;
+  flatrate?: TMDbProviderItem[];
+  rent?: TMDbProviderItem[];
+  buy?: TMDbProviderItem[];
+  ads?: TMDbProviderItem[];
+  free?: TMDbProviderItem[];
+}
+
+export interface WatchProvidersResponse {
+  id: number;
+  results: Record<string, TMDbRegionWatchProviders>;
+}
+
+const PREFERRED_PROVIDER_COUNTRIES = [
+  "US",
+  "GB",
+  "DE",
+  "FR",
+  "ES",
+  "IT",
+  "NL",
+  "SE",
+  "NO",
+  "DK"
+];
+
+export function logoUrl(path: string | null, size = "w92"): string {
+  if (!path) return "";
+  return `${TMDB_IMAGE_BASE}/${size}${path}`;
+}
+
+export function sortWatchProviderRegions(results: Record<string, TMDbRegionWatchProviders>) {
+  const available = Object.keys(results);
+  const prioritized = PREFERRED_PROVIDER_COUNTRIES.filter((code) => available.includes(code));
+  const remaining = available.filter((code) => !PREFERRED_PROVIDER_COUNTRIES.includes(code)).sort();
+  return [...prioritized, ...remaining];
+}
+
 /** All TMDb calls go through our API proxy to keep the key server-side */
 export async function tmdbFetch<T>(endpoint: string): Promise<T> {
   const res = await fetch(`/api/tmdb?endpoint=${encodeURIComponent(endpoint)}`);
@@ -77,11 +122,20 @@ export async function getMovieDetails(tmdbId: number) {
   }>(`/movie/${tmdbId}?append_to_response=credits`);
 }
 
+export async function getMovieWatchProviders(tmdbId: number) {
+  return tmdbFetch<WatchProvidersResponse>(`/movie/${tmdbId}/watch/providers`);
+}
+
+export async function getTvWatchProviders(tmdbId: number) {
+  return tmdbFetch<WatchProvidersResponse>(`/tv/${tmdbId}/watch/providers`);
+}
+
 export async function getSeasonEpisodes(tmdbId: number, season: number) {
   return tmdbFetch<{
     episodes: Array<{
       episode_number: number;
       name: string;
+      overview: string;
       still_path: string | null;
       air_date: string | null;
     }>;
@@ -110,6 +164,22 @@ export async function getTvRecommendations(tmdbId: number) {
       overview: string;
     }>;
   }>(`/tv/${tmdbId}/recommendations`);
+}
+
+export async function getTrendingAll() {
+  return tmdbFetch<{
+    results: Array<{
+      id: number;
+      name?: string;
+      title?: string;
+      media_type: "movie" | "tv" | string;
+      backdrop_path: string | null;
+      poster_path: string | null;
+      overview: string;
+      release_date?: string;
+      first_air_date?: string;
+    }>;
+  }>("/trending/all/day");
 }
 
 export async function getUpcomingMovies() {

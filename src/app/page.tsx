@@ -7,24 +7,24 @@ import AdBanner from "@/components/AdBanner";
 
 const FEATURES = [
   {
+    icon: "✨",
+    title: "AI Recommendation Search",
+    desc: "Ask for a mood, genre, or title and get smart TV Time suggestions from trending movies and shows.",
+  },
+  {
+    icon: "📝",
+    title: "Review & Rating",
+    desc: "Rate what you watched and leave a review. Your personal ratings stay separate from community comments.",
+  },
+  {
     icon: "📺",
-    title: "Track Your Shows",
-    desc: "Keep up with every episode across all your TV shows. Never forget where you left off.",
+    title: "Where to Watch",
+    desc: "See streaming providers for movies and shows so you can find the best place to watch instantly.",
   },
   {
-    icon: "📥",
-    title: "Import History from TV Time 🆕",
-    desc: "Bring your existing watch data from TV Time with a simple zip upload.",
-  },
-  {
-    icon: "😊",
-    title: "React & Feel",
-    desc: "Log your emotional reactions to each episode. See how a show made you feel over time.",
-  },
-  {
-    icon: "☁️",
-    title: "Cloud Synced",
-    desc: "Your data is saved to your account. Access it from anywhere, on any device.",
+    icon: "💬",
+    title: "Community Feedback",
+    desc: "Browse public comments and community discussion about shows without mixing them into your private reviews.",
   },
 ];
 

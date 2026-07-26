@@ -22,16 +22,8 @@ export default function UserReviewWidget({ tmdbId, mediaType }: { tmdbId: number
     async function fetchReview() {
       const db = getSupabase();
       
-      const { data: ratingData } = await db.from("user_ratings")
-        .select("rating_value")
-        .eq("user_id", user!.id)
-        .eq("tmdb_id", tmdbId)
-        .eq("media_type", mediaType)
-        .limit(1)
-        .single();
-        
-      const { data: commentData } = await db.from("user_comments")
-        .select("comment_text")
+      const { data: reviewData } = await db.from("user_ratings")
+        .select("rating_value, review_text")
         .eq("user_id", user!.id)
         .eq("tmdb_id", tmdbId)
         .eq("media_type", mediaType)
@@ -46,10 +38,10 @@ export default function UserReviewWidget({ tmdbId, mediaType }: { tmdbId: number
         .limit(1)
         .single();
 
-      if (ratingData || commentData || favData) {
+      if (reviewData || favData) {
         setData({
-          rating: ratingData?.rating_value,
-          comment: commentData?.comment_text,
+          rating: reviewData?.rating_value,
+          comment: reviewData?.review_text,
           favorite: !!favData
         });
       }
@@ -61,9 +53,13 @@ export default function UserReviewWidget({ tmdbId, mediaType }: { tmdbId: number
 
   if (loading || !data) return null;
 
+  const ratingNumber = data.rating ? Number(data.rating) : 0;
+  const effectiveRating = Math.min(5, ratingNumber);
+  const filledStars = Math.round(effectiveRating);
+  const emptyStars = 5 - filledStars;
+
   return (
     <div className="mt-8 mb-6 p-6 rounded-2xl bg-card-surface border border-white/10 shadow-lg relative overflow-hidden">
-      {/* Decorative gradient */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-accent-yellow to-orange-500" />
       
       <div className="flex items-center gap-2 mb-4">
@@ -74,16 +70,32 @@ export default function UserReviewWidget({ tmdbId, mediaType }: { tmdbId: number
       </div>
       
       {data.rating && (
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-2xl">⭐</span>
-          <span className="text-lg font-bold text-accent-yellow">{data.rating} <span className="text-sm text-text-muted">/ 10</span></span>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            {Array.from({ length: 5 }, (_, index) => {
+              const fill = Math.min(Math.max(ratingNumber - index, 0), 1);
+
+              return (
+                <div key={index} className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/5 text-text-muted shadow-sm shadow-black/10">
+                  <span className="text-3xl">★</span>
+                  <span
+                    className="pointer-events-none absolute inset-y-0 left-0 overflow-hidden text-3xl text-accent-yellow"
+                    style={{ width: `${fill * 100}%` }}
+                  >
+                    ★
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <span className="text-lg font-bold text-accent-yellow">{effectiveRating.toFixed(1)} <span className="text-sm text-text-muted">/ 5</span></span>
         </div>
       )}
       
       {data.comment && (
-        <p className="text-text-primary italic leading-relaxed border-l-4 border-accent-yellow/50 pl-4 bg-bg-primary/30 p-3 rounded-r-lg">
-          "{data.comment}"
-        </p>
+        <div className="rounded-2xl border border-white/10 bg-bg-primary/30 p-4">
+          <p className="text-text-primary italic leading-relaxed">{data.comment}</p>
+        </div>
       )}
     </div>
   );
