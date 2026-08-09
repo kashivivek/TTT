@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useAuth } from "@/components/AuthProvider";
 import { getSupabase } from "@/lib/supabase";
 
-const CURRENT_VERSION = "v3";
+const CURRENT_VERSION = "v4";
 
 export default function WhatsNewWidget() {
   const { user } = useAuth();
@@ -65,37 +65,18 @@ export default function WhatsNewWidget() {
               ✕
             </button>
             <div className="flex items-center gap-3 mb-6">
-              <span className="text-3xl">🗣️</span>
-              <h2 className="text-2xl font-bold">You asked, we built!</h2>
+                      <span className="text-3xl">🗣️</span>
+                      <h2 className="text-2xl font-bold">You asked, we built!</h2>
             </div>
             <div className="space-y-4">
-              <div>
-                <h3 className="font-bold text-lg text-accent-yellow mb-1">AI-powered suggestions</h3>
-                <p className="text-sm text-text-muted leading-relaxed">
-                  Get personalized movie and TV recommendations powered by AI. Just describe what you're in the mood for!
-                </p>
-              </div>
+                      <div>
+                        <h3 className="font-bold text-lg text-accent-yellow mb-1">AI-powered, personalized recommendations</h3>
+                        <p className="text-sm text-text-muted leading-relaxed">
+                          Ask the app for mood- or title-based suggestions and get recommendations tailored to your recent watches — try the ✨ Suggest me something button.
+                        </p>
+                      </div>
 
-              <div>
-                <h3 className="font-bold text-lg text-accent-yellow mb-1">Where to watch</h3>
-                <p className="text-sm text-text-muted leading-relaxed">
-                  Your preferred streaming providers show up instantly in the title view.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-lg text-accent-yellow mb-1">Episode info</h3>
-                <p className="text-sm text-text-muted leading-relaxed">
-                  Episode details and upcoming air dates now appear more reliably with improved TV Time sync.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-lg text-accent-yellow mb-1">Reviews & ratings</h3>
-                <p className="text-sm text-text-muted leading-relaxed">
-                  Your reviews and ratings save together and stay visible immediately after submitting.
-                </p>
-              </div>
+                      {/* Removed account-deletion email copy and improved onboarding note per request */}
 
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <button

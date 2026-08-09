@@ -46,7 +46,12 @@ export default function ProfilePage() {
   const [savingName, setSavingName] = useState(false);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showPreferencesSection, setShowPreferencesSection] = useState(false);
   const [activeTab, setActiveTab] = useState<"history" | "favorites" | "reviews" | "badges">("history");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("other");
+  const [deleteComments, setDeleteComments] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   // Import state
   const [importing, setImporting] = useState(false);
@@ -286,6 +291,73 @@ export default function ProfilePage() {
     } finally {
       setImporting(false);
       setProgress(null);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setDeleting(true);
+    try {
+      const supabase = getSupabase();
+      // Try server-side deletion first (requires SUPABASE_SERVICE_ROLE_KEY configured server-side)
+      try {
+        const sess = await supabase.auth.getSession();
+        const accessToken = sess?.data?.session?.access_token;
+        if (accessToken) {
+          const res = await fetch("/api/delete-account", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ reason: deleteReason, comments: deleteComments }),
+          });
+
+          if (res.ok) {
+            await supabase.auth.signOut();
+            router.push("/");
+            setDeleting(false);
+            setShowDeleteModal(false);
+            return;
+          }
+          // otherwise fall through to client-side deletion
+          console.error("Server delete-account responded with", res.status);
+        }
+      } catch (e) {
+        console.error("Server-side delete attempt failed", e);
+      }
+
+      // Fallback: delete via client (best-effort)
+      const tables = [
+        "watch_history",
+        "tracked_shows",
+        "user_ratings",
+        "user_comments",
+        "user_preferences",
+      ];
+
+      await Promise.all(
+        tables.map((t) =>
+          supabase.from(t).delete().eq("user_id", user.id).then(() => {}).catch(() => {})
+        )
+      );
+
+      try {
+        await supabase.from("account_deletions").insert({
+          user_id: user.id,
+          reason: deleteReason,
+          comments: deleteComments || null,
+          deleted_at: new Date().toISOString(),
+        });
+      } catch {}
+
+      await supabase.auth.signOut();
+      router.push("/");
+    } catch (e) {
+      console.error("Failed to delete account data", e);
+    } finally {
+      setDeleting(false);
+      setShowDeleteModal(false);
     }
   };
 
@@ -548,68 +620,80 @@ export default function ProfilePage() {
           )}
         </section>
 
-        {/* Preferences section */}
+        {/* Preferences section (collapsed by default) */}
         <section className="mt-6 space-y-4">
-          <div className="bg-card-surface rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-card-surface rounded-xl">
+            <button
+              onClick={() => setShowPreferencesSection((s) => !s)}
+              className="w-full flex items-center justify-between p-5"
+            >
               <div>
                 <h2 className="text-lg font-bold text-text-primary">Preferences</h2>
                 <p className="text-text-muted text-sm">Save your default country, languages, genres, and actors.</p>
               </div>
-              <button
-                onClick={handleSavePreferences}
-                disabled={savingPreferences}
-                className="rounded-full bg-accent-yellow px-4 py-2 text-sm font-bold text-bg-primary hover:brightness-110 disabled:opacity-70"
-              >
-                {savingPreferences ? "Saving..." : "Save Preferences"}
-              </button>
-            </div>
+              <span className={`text-text-muted transition-transform ${showPreferencesSection ? "rotate-180" : ""}`}>▾</span>
+            </button>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-text-muted text-xs uppercase tracking-[0.18em] mb-2 block">Preferred country</span>
-                <input
-                  type="text"
-                  value={preferredCountry}
-                  onChange={(e) => setPreferredCountry(e.target.value)}
-                  placeholder="US"
-                  className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-text-primary"
-                />
-              </label>
+            {showPreferencesSection && (
+              <div className="p-5 border-t border-white/5">
+                <div className="flex items-center justify-between mb-4">
+                  <div />
+                  <button
+                    onClick={handleSavePreferences}
+                    disabled={savingPreferences}
+                    className="rounded-full bg-accent-yellow px-4 py-2 text-sm font-bold text-bg-primary hover:brightness-110 disabled:opacity-70"
+                  >
+                    {savingPreferences ? "Saving..." : "Save Preferences"}
+                  </button>
+                </div>
 
-              <label className="block">
-                <span className="text-text-muted text-xs uppercase tracking-[0.18em] mb-2 block">Preferred languages</span>
-                <input
-                  type="text"
-                  value={preferredLanguages}
-                  onChange={(e) => setPreferredLanguages(e.target.value)}
-                  placeholder="English, Spanish"
-                  className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-text-primary"
-                />
-              </label>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-text-muted text-xs uppercase tracking-[0.18em] mb-2 block">Preferred country</span>
+                    <input
+                      type="text"
+                      value={preferredCountry}
+                      onChange={(e) => setPreferredCountry(e.target.value)}
+                      placeholder="US"
+                      className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-text-primary"
+                    />
+                  </label>
 
-              <label className="block sm:col-span-2">
-                <span className="text-text-muted text-xs uppercase tracking-[0.18em] mb-2 block">Favorite genres</span>
-                <input
-                  type="text"
-                  value={favoriteGenres}
-                  onChange={(e) => setFavoriteGenres(e.target.value)}
-                  placeholder="Drama, Comedy, Sci-Fi"
-                  className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-text-primary"
-                />
-              </label>
+                  <label className="block">
+                    <span className="text-text-muted text-xs uppercase tracking-[0.18em] mb-2 block">Preferred languages</span>
+                    <input
+                      type="text"
+                      value={preferredLanguages}
+                      onChange={(e) => setPreferredLanguages(e.target.value)}
+                      placeholder="English, Spanish"
+                      className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-text-primary"
+                    />
+                  </label>
 
-              <label className="block sm:col-span-2">
-                <span className="text-text-muted text-xs uppercase tracking-[0.18em] mb-2 block">Favorite actors</span>
-                <input
-                  type="text"
-                  value={favoriteActors}
-                  onChange={(e) => setFavoriteActors(e.target.value)}
-                  placeholder="Keanu Reeves, Zendaya"
-                  className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-text-primary"
-                />
-              </label>
-            </div>
+                  <label className="block sm:col-span-2">
+                    <span className="text-text-muted text-xs uppercase tracking-[0.18em] mb-2 block">Favorite genres</span>
+                    <input
+                      type="text"
+                      value={favoriteGenres}
+                      onChange={(e) => setFavoriteGenres(e.target.value)}
+                      placeholder="Drama, Comedy, Sci-Fi"
+                      className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-text-primary"
+                    />
+                  </label>
+
+                  <label className="block sm:col-span-2">
+                    <span className="text-text-muted text-xs uppercase tracking-[0.18em] mb-2 block">Favorite actors</span>
+                    <input
+                      type="text"
+                      value={favoriteActors}
+                      onChange={(e) => setFavoriteActors(e.target.value)}
+                      placeholder="Keanu Reeves, Zendaya"
+                      className="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-3 text-text-primary"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -629,17 +713,72 @@ export default function ProfilePage() {
               })}
             </p>
           </div>
-          <button
-            onClick={() => signOut().then(() => router.push("/"))}
-            className="w-full py-3 text-red-400 hover:text-red-300 font-semibold text-sm
-                       bg-card-surface rounded-xl hover:bg-red-400/10 transition-colors"
-          >
-            Sign Out
-          </button>
+          <div className="w-full py-3">
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="w-full py-3 text-red-400 font-semibold text-sm bg-card-surface rounded-xl hover:bg-red-500/5 transition-colors"
+              >
+                Delete Account
+              </button>
+              <button
+                onClick={() => signOut().then(() => router.push("/"))}
+                className="w-full py-3 text-red-400 hover:text-red-300 font-semibold text-sm bg-card-surface rounded-xl hover:bg-red-400/10 transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
         </section>
       </div>
 
       <BottomNav />
+      {showDeleteModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-[9999]">
+          <div className="absolute inset-0 bg-black/60 z-[9999]" onClick={() => setShowDeleteModal(false)} />
+          <div className="bg-card-surface rounded-xl p-6 z-[10000] w-full max-w-lg mx-4">
+            <h3 className="text-lg font-bold text-text-primary mb-2">Delete account</h3>
+            <p className="text-text-muted text-sm mb-4">This will remove your watch history, tracked shows, reviews, preferences, and related data from our application. This cannot be undone.</p>
+
+            <label className="block text-sm text-text-muted mb-2">Reason for deleting</label>
+            <select
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              className="w-full rounded-2xl border border-white/10 bg-bg-primary px-3 py-2 mb-3"
+            >
+              <option value="privacy">Privacy concerns</option>
+              <option value="not_useful">App not useful</option>
+              <option value="technical">Technical issues</option>
+              <option value="other">Other</option>
+            </select>
+
+            <label className="block text-sm text-text-muted mb-2">Additional comments (optional)</label>
+            <textarea
+              value={deleteComments}
+              onChange={(e) => setDeleteComments(e.target.value)}
+              rows={4}
+              className="w-full rounded-2xl border border-white/10 bg-bg-primary px-3 py-2 mb-4"
+            />
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 rounded-full bg-card-surface text-text-muted"
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                className="px-4 py-2 rounded-full bg-red-500 text-white font-bold"
+                disabled={deleting}
+              >
+                {deleting ? "Deleting..." : "Delete account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

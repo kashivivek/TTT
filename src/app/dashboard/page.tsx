@@ -38,10 +38,12 @@ function DashboardContent() {
   
   const [trendingAll, setTrendingAll] = useState<any[]>([]);
   const [aiQuery, setAiQuery] = useState("");
+  const [aiTyped, setAiTyped] = useState(false);
   const [tvTimeQuery, setTvTimeQuery] = useState("");
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [loadingExplore, setLoadingExplore] = useState(false);
   const [searchingAi, setSearchingAi] = useState(false);
+  const [suggestingMe, setSuggestingMe] = useState(false);
   const [aiCacheLoaded, setAiCacheLoaded] = useState(false);
   
   const [upcomingMovies, setUpcomingMovies] = useState<any[]>([]);
@@ -110,11 +112,25 @@ function DashboardContent() {
             }))
           );
           if (data.length === 0) {
-            const hasDismissed = localStorage.getItem("hasDismissedImport");
-            if (!hasDismissed) {
-              setShowImportPopup(true);
+              // Show import popup only for new users who haven't seen it (persisted server-side or locally)
+              const seenServer = user?.user_metadata?.has_seen_import_popup;
+              const hasDismissedLocal = typeof window !== "undefined" && localStorage.getItem("hasDismissedImport");
+              if (!seenServer && !hasDismissedLocal) {
+                // check if user has any watch history; if they do, don't show
+                try {
+                  const { data: watchData } = await getSupabase()
+                    .from("watch_history")
+                    .select("tmdb_id", { count: "exact", head: false })
+                    .eq("user_id", user.id)
+                    .limit(1);
+                  if (!watchData || watchData.length === 0) {
+                    setShowImportPopup(true);
+                  }
+                } catch (e) {
+                  setShowImportPopup(true);
+                }
+              }
             }
-          }
         }
       } catch {
         // Table might not exist yet — that's ok
@@ -273,6 +289,77 @@ function DashboardContent() {
     }
 
     setSearchingAi(false);
+  };
+
+  const handleSuggestMe = async () => {
+    if (!user || suggestingMe || searchingAi) return;
+    setSuggestingMe(true);
+    setSearchingAi(true);
+    setAiSuggestions([]);
+    setTvTimeQuery("Personalized suggestions");
+
+    try {
+      const [{ data: watchData }, { data: trackedData }] = await Promise.all([
+        getSupabase()
+          .from("watch_history")
+          .select("tmdb_id, media_type, watched_at")
+          .eq("user_id", user.id)
+          .order("watched_at", { ascending: false })
+          .limit(50),
+        getSupabase()
+          .from("tracked_shows")
+          .select("tmdb_id")
+          .eq("user_id", user.id),
+      ]);
+
+      const watchedIds = new Set<number>();
+      (watchData || []).forEach((r: any) => watchedIds.add(r.tmdb_id));
+
+      const trackedIds = new Set<number>();
+      (trackedData || []).forEach((r: any) => trackedIds.add(r.tmdb_id));
+
+      const excludeIds = new Set<number>([...watchedIds, ...trackedIds]);
+
+      // Fetch a few recent watched details to provide as context to the LLM
+      const recentIds = Array.from(watchedIds).slice(0, 24);
+      const detailsPromises = recentIds.map((id) => {
+        const row = (watchData || []).find((r: any) => r.tmdb_id === id);
+        return (async () => {
+          try {
+            if (row && row.media_type === "movie") return await getMovieDetails(id);
+            return await getTvDetails(id);
+          } catch {
+            return null;
+          }
+        })();
+      });
+
+      const details = (await Promise.all(detailsPromises)).filter(Boolean) as any[];
+      const titles = details.map((d) => d.title || d.name).filter(Boolean).slice(0, 12);
+
+      const prompt = `Suggest up to 12 movies or TV shows for this user based on their recent watch history. Do NOT recommend anything the user has already watched or is tracking. Recent watches:\n${titles.join("\n")}\nReturn only a JSON array of title strings.`;
+
+      const response = await fetch("/api/groq-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: prompt }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      let suggestions: any[] = Array.isArray(data.suggestions) ? data.suggestions : [];
+
+      // Filter out any already-watched or tracked items
+      suggestions = suggestions.filter((it) => !excludeIds.has(it.id));
+
+      setAiSuggestions(prioritizeResults("", suggestions));
+      setTvTimeQuery("For you");
+    } catch (e) {
+      console.error("Suggest me failed", e);
+      setAiSuggestions([]);
+    } finally {
+      setSearchingAi(false);
+      setSuggestingMe(false);
+    }
   };
 
 
@@ -508,20 +595,43 @@ function DashboardContent() {
               <form onSubmit={handleAiSearch} className="space-y-4">
                 <textarea
                   value={aiQuery}
-                  onChange={(e) => setAiQuery(e.target.value)}
+                  onChange={(e) => {
+                    setAiQuery(e.target.value);
+                    setAiTyped(true);
+                  }}
                   rows={3}
                   placeholder="I want to watch something horror and binge-worthy..."
                   className="w-full rounded-3xl border border-white/10 bg-bg-primary px-4 py-3 text-text-primary placeholder:text-text-muted outline-none focus:border-accent-yellow"
                 />
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <p className="text-xs text-text-muted">Try prompts like “horror thrillers”, “feel-good comedies”, or “new TV shows with suspense”.</p>
-                  <button
-                    type="submit"
-                    className="rounded-full bg-accent-yellow px-5 py-2.5 font-bold text-bg-primary hover:brightness-110 disabled:opacity-70"
-                    disabled={searchingAi}
-                  >
-                    {searchingAi ? "Finding suggestions..." : "Get TV Time Suggestions"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSuggestMe}
+                      disabled={suggestingMe || searchingAi}
+                      className="rounded-full border border-white/10 px-3 py-2 text-sm hover:bg-white/5 flex items-center gap-2"
+                      aria-label="Suggest me"
+                    >
+                      {suggestingMe ? (
+                        <div className="w-4 h-4 border-2 border-accent-yellow border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <span className="text-lg">✨</span>
+                          <span className="hidden sm:inline">Suggest me something</span>
+                        </>
+                      )}
+                    </button>
+                    {aiTyped && aiQuery.trim().length > 0 && (
+                      <button
+                        type="submit"
+                        className="rounded-full bg-accent-yellow px-5 py-2.5 font-bold text-bg-primary hover:brightness-110 disabled:opacity-70"
+                        disabled={searchingAi}
+                      >
+                        {searchingAi ? "Finding suggestions..." : "Get TV Time Suggestions"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </form>
             </div>
@@ -529,7 +639,7 @@ function DashboardContent() {
             {searchingAi && (
               <div className="flex items-center gap-3 text-text-muted">
                 <div className="w-5 h-5 border-2 border-accent-yellow border-t-transparent rounded-full animate-spin" />
-                <span>Getting recommendations from AI...</span>
+                <span>{suggestingMe ? "Getting recommendations tailored for you..." : "Getting recommendations from AI..."}</span>
               </div>
             )}
 
@@ -540,7 +650,7 @@ function DashboardContent() {
             {(aiSuggestions.length > 0 ? aiSuggestions : trendingAll).length > 0 ? (
               <div>
                 <h3 className="text-xl font-bold text-text-primary mb-4">
-                  {aiSuggestions.length > 0 ? `Suggestions for “${tvTimeQuery}”` : "Trending on TV Time"}
+                  {aiSuggestions.length > 0 ? (tvTimeQuery === "For you" ? "Suggestions based on your watch history" : `Suggestions for “${tvTimeQuery}”`) : "Trending on TV Time"}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {(aiSuggestions.length > 0 ? aiSuggestions : trendingAll).map((item: any) => {
@@ -853,9 +963,9 @@ function DashboardContent() {
       <BottomNav />
       
       {showImportPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => { setShowImportPopup(false); localStorage.setItem("hasDismissedImport", "true"); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={async () => { setShowImportPopup(false); if (typeof window !== "undefined") localStorage.setItem("hasDismissedImport", "true"); if (user) { try { await getSupabase().auth.updateUser({ data: { has_seen_import_popup: true } }); } catch {} } }}>
           <div className="bg-card-surface border border-accent-yellow/20 rounded-2xl max-w-lg w-full p-8 relative" onClick={(e) => e.stopPropagation()}>
-            <button className="absolute top-4 right-4 text-text-muted hover:text-white" onClick={() => { setShowImportPopup(false); localStorage.setItem("hasDismissedImport", "true"); }}>✕</button>
+            <button className="absolute top-4 right-4 text-text-muted hover:text-white" onClick={async () => { setShowImportPopup(false); if (typeof window !== "undefined") localStorage.setItem("hasDismissedImport", "true"); if (user) { try { await getSupabase().auth.updateUser({ data: { has_seen_import_popup: true } }); } catch {} } }}>✕</button>
             <h2 style={{ marginTop: 0, fontSize: "24px", fontWeight: "bold" }}>🚀 Import Your TV Time History</h2>
             <p style={{ fontSize: "16px", color: "#aaa", marginBottom: "20px" }}>Move all your watched shows, movies, and custom watchlists over to our platform in just a few minutes!</p>
             
@@ -868,8 +978,8 @@ function DashboardContent() {
             </ul>
             
             <div className="popup-links flex flex-col sm:flex-row gap-4 my-6 text-sm">
-              <a href="https://tvtime.com" target="_blank" rel="noopener noreferrer" className="bg-white/10 hover:bg-white/20 px-4 py-3 rounded-xl text-center font-bold flex-1 transition-colors">👉 Go to TV Time</a>
-              <a href="/profile" className="bg-accent-yellow text-bg-primary hover:brightness-110 px-4 py-3 rounded-xl text-center font-bold flex-1 transition-colors">⚙️ Go to Profile</a>
+              <a href="https://tvtime.com" target="_blank" rel="noopener noreferrer" onClick={() => { if (typeof window !== "undefined") localStorage.setItem("hasDismissedImport", "true"); }} className="bg-white/10 hover:bg-white/20 px-4 py-3 rounded-xl text-center font-bold flex-1 transition-colors">👉 Go to TV Time</a>
+              <a href="/profile" onClick={async () => { if (typeof window !== "undefined") localStorage.setItem("hasDismissedImport", "true"); if (user) { try { await getSupabase().auth.updateUser({ data: { has_seen_import_popup: true } }); } catch {} } }} className="bg-accent-yellow text-bg-primary hover:brightness-110 px-4 py-3 rounded-xl text-center font-bold flex-1 transition-colors">⚙️ Go to Profile</a>
             </div>
             
             <p style={{ fontSize: "13px", color: "#777", fontStyle: "italic", margin: 0 }}>

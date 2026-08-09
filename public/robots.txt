@@ -1,0 +1,13 @@
+# Allow all standard search crawlers
+User-agent: *
+Allow: /
+
+# Explicitly permit Google AdSense review crawlers
+User-agent: Mediapartners-Google
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+# Link to your sitemap
+Sitemap: https://tvtime.online/sitemap.xml
