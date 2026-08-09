@@ -61,7 +61,8 @@ export async function POST(request: NextRequest) {
         created_at: new Date().toISOString(),
       });
     } catch (e) {
-      console.error("Failed to insert account_deletions record", e?.message || e);
+        const msg = (e as any)?.message ?? String(e);
+        console.error("Failed to insert account_deletions record", msg);
     }
 
     // Send deletion email (best-effort) using Resend if configured — reuse feedback flow
@@ -102,7 +103,8 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch (e) {
-      console.error("Failed to send deletion email", e);
+        const msg = (e as any)?.message ?? String(e);
+        console.error("Failed to send deletion email", msg);
     }
 
     // Best-effort: remove application data owned by the user (exclude account_deletions)
@@ -117,7 +119,8 @@ export async function POST(request: NextRequest) {
     await Promise.all(
       tables.map((t) =>
         supabaseAdmin.from(t).delete().eq("user_id", uid).then(() => {}).catch((e) => {
-          console.error(`Failed deleting from ${t}`, e?.message || e);
+            const msg = (e as any)?.message ?? String(e);
+            console.error(`Failed deleting from ${t}`, msg);
         })
       )
     );
