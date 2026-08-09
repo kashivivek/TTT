@@ -117,12 +117,14 @@ export async function POST(request: NextRequest) {
     ];
 
     await Promise.all(
-      tables.map((t) =>
-        supabaseAdmin.from(t).delete().eq("user_id", uid).then(() => {}).catch((e) => {
-            const msg = (e as any)?.message ?? String(e);
-            console.error(`Failed deleting from ${t}`, msg);
-        })
-      )
+      tables.map(async (t) => {
+        try {
+          await supabaseAdmin.from(t).delete().eq("user_id", uid);
+        } catch (e) {
+          const msg = (e as any)?.message ?? String(e);
+          console.error(`Failed deleting from ${t}`, msg);
+        }
+      })
     );
 
     // Finally delete the auth user

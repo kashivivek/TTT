@@ -337,9 +337,13 @@ export default function ProfilePage() {
       ];
 
       await Promise.all(
-        tables.map((t) =>
-          supabase.from(t).delete().eq("user_id", user.id).then(() => {}).catch(() => {})
-        )
+        tables.map(async (t) => {
+          try {
+            await supabase.from(t).delete().eq("user_id", user.id);
+          } catch (e) {
+            // best-effort client-side deletion; ignore errors
+          }
+        })
       );
 
       try {
