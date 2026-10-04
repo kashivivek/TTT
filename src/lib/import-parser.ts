@@ -2,6 +2,7 @@ import JSZip from "jszip";
 import { searchMulti, tmdbFetch } from "./tmdb";
 import { getSupabase } from "./supabase";
 import type { WatchHistoryEntry } from "./types";
+import { WAITING_TITLE } from "./progress";
 
 interface ImportProgress {
   stage: string;
@@ -361,7 +362,7 @@ export async function parseImportZip(
             current_season: 1,
             current_episode: 1,
             episode_title: "Episode 1",
-            updated_at: new Date().toISOString()
+            updated_at: ""
           });
         }
         if (r.type === "watch") {
@@ -372,6 +373,12 @@ export async function parseImportZip(
              track.current_season = s;
              track.current_episode = e;
              track.episode_title = `Episode ${e}`;
+          }
+          // Last activity drives the "Not watched recently" grouping
+          const watchedAt = r.watched_at ? new Date(r.watched_at) : null;
+          if (watchedAt && !Number.isNaN(watchedAt.getTime())) {
+            const iso = watchedAt.toISOString();
+            if (!track.updated_at || iso > track.updated_at) track.updated_at = iso;
           }
         }
       } else if (r.media_type === "movie") {
@@ -417,8 +424,10 @@ export async function parseImportZip(
           });
         }
       } else if (r.type === "rating") {
-         if (!seenRatings.has(recordKey)) {
-          seenRatings.add(recordKey);
+         // The DB allows one rating per title (unique user_id, tmdb_id, media_type)
+         const ratingKey = `${tmdbData.id}_${r.media_type}`;
+         if (!seenRatings.has(ratingKey)) {
+          seenRatings.add(ratingKey);
           ratingsPayload.push({
             user_id: user.id,
             tmdb_id: tmdbData.id,
@@ -467,6 +476,9 @@ export async function parseImportZip(
 
     // Resolve Next Episode for TV Shows
     const trackPayloadRaw = Array.from(finalTrackedShows.values());
+    for (const t of trackPayloadRaw) {
+      if (!t.updated_at) t.updated_at = new Date().toISOString();
+    }
     const tvShowsToResolve = trackPayloadRaw.filter(t => t.media_type === 'tv' && t.current_season > 0);
     let resolvedTv = 0;
     
@@ -530,7 +542,7 @@ export async function parseImportZip(
                 t.media_type = 'completed';
              } else if (details && details.status) {
                 t.media_type = 'awaiting';
-                t.episode_title = 'Release date not yet confirmed';
+                t.episode_title = WAITING_TITLE;
              } else {
                 // If API failed or no status, keep it as TV so it doesn't get lost
                 t.media_type = 'tv';
@@ -595,13 +607,15 @@ export async function parseImportZip(
     const trackInserts = trackPayload.filter(r => !existingTrackedSet.has(r.tmdb_id));
     const trackUpdates = trackPayload.filter(r => existingTrackedSet.has(r.tmdb_id));
 
-    // Generic batch insert helper
-    const insertBatch = async (table: string, payload: any[]) => {
+    // Generic batch insert helper. With onConflict, existing rows are skipped instead of failing the whole batch.
+    const insertBatch = async (table: string, payload: any[], onConflict?: string) => {
       if (payload.length === 0) return;
       for (let i = 0; i < payload.length; i += 100) {
         const batch = payload.slice(i, i + 100);
         try {
-          const { error } = await getSupabase().from(table).insert(batch);
+          const { error } = onConflict
+            ? await getSupabase().from(table).upsert(batch, { onConflict, ignoreDuplicates: true })
+            : await getSupabase().from(table).insert(batch);
           if (error) {
               if (error.code === '23505') {
                  // Ignore unique constraint violations gracefully
@@ -618,7 +632,7 @@ export async function parseImportZip(
     };
 
     
-    await insertBatch("watch_history", finalWatchPayload);
+    await insertBatch("watch_history", finalWatchPayload, "user_id,tmdb_id,season_number,episode_number");
     
     // Insert new tracked shows
     await insertBatch("tracked_shows", trackInserts);
@@ -636,7 +650,7 @@ export async function parseImportZip(
     }
 
     // Now insert the rest
-    await insertBatch("user_ratings", ratingsPayload);
+    await insertBatch("user_ratings", ratingsPayload, "user_id,tmdb_id,media_type");
     await insertBatch("user_comments", commentsPayload);
     await insertBatch("user_emotions", emotionsPayload);
     await insertBatch("user_favorites", favoritesPayload);

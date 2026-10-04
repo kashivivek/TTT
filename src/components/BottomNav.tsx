@@ -1,39 +1,53 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { Suspense } from "react";
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 
 const NAV_ITEMS = [
-  { label: "Shows", href: "/dashboard", icon: "shows" },
-  { label: "Movies", href: "/dashboard?tab=movies", icon: "movies" },
-  { label: "Explore", href: "/dashboard?tab=explore", icon: "explore" },
-  { label: "Profile", href: "/profile", icon: "profile" },
+  { label: "Shows", href: "/dashboard", icon: "shows", match: (p: string, tab: string | null) => p === "/dashboard" && (!tab || tab === "shows") },
+  { label: "Movies", href: "/dashboard?tab=movies", icon: "movies", match: (p: string, tab: string | null) => p === "/dashboard" && tab === "movies" },
+  { label: "Upcoming", href: "/calendar", icon: "calendar", match: (p: string) => p === "/calendar" },
+  { label: "Explore", href: "/dashboard?tab=explore", icon: "explore", match: (p: string, tab: string | null) => p === "/dashboard" && tab === "explore" },
+  { label: "Profile", href: "/profile", icon: "profile", match: (p: string) => p === "/profile" },
 ];
 
 export default function BottomNav() {
-  const pathname = usePathname();
-
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-50 bg-bg-primary border-t border-card-surface">
+    <Suspense fallback={<NavBar activeLabel={null} />}>
+      <BottomNavWithParams />
+    </Suspense>
+  );
+}
+
+function BottomNavWithParams() {
+  const pathname = usePathname();
+  const tab = useSearchParams().get("tab");
+  const active = NAV_ITEMS.find((item) => item.match(pathname, tab));
+  return <NavBar activeLabel={active?.label ?? null} />;
+}
+
+function NavBar({ activeLabel }: { activeLabel: string | null }) {
+  return (
+    <nav
+      className="fixed bottom-0 inset-x-0 z-50 bg-bg-primary border-t border-card-surface"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       <div className="max-w-7xl mx-auto flex items-center justify-around py-2">
         {NAV_ITEMS.map((item) => {
-          const active =
-            item.href === "/profile"
-              ? pathname === "/profile"
-              : item.href === "/dashboard"
-                ? pathname === "/dashboard"
-                : false;
-
+          const active = item.label === activeLabel;
           return (
-            <a
+            <Link
               key={item.label}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${
-                active ? "text-text-primary" : "text-text-muted hover:text-text-primary"
+                active ? "text-accent-yellow" : "text-text-muted hover:text-text-primary"
               }`}
             >
               <NavIcon name={item.icon} active={active} />
               <span className="text-[10px] font-medium">{item.label}</span>
-            </a>
+            </Link>
           );
         })}
       </div>
@@ -61,6 +75,12 @@ function NavIcon({ name, active }: { name: string; active: boolean }) {
     case "explore":
       return (
         <span className={`${cls} flex items-center justify-center text-lg`}>✨</span>
+      );
+    case "calendar":
+      return (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={strokeWidth}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+        </svg>
       );
     case "profile":
       return (

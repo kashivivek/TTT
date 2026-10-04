@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
 import StarRating from "@/components/StarRating";
@@ -14,6 +16,7 @@ const REVIEW_COMMENT_PREFIX = "__TTT_REVIEW__:";
 
 export default function ReviewEditor({ tmdbId, mediaType }: ReviewEditorProps) {
   const { user } = useAuth();
+  const pathname = usePathname();
   const [rating, setRating] = useState<number>(0);
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
@@ -35,7 +38,7 @@ export default function ReviewEditor({ tmdbId, mediaType }: ReviewEditorProps) {
         .eq("user_id", user!.id)
         .eq("tmdb_id", tmdbId)
         .eq("media_type", mediaType)
-        .single();
+        .maybeSingle();
 
       if (ratingData?.rating_value) {
         const numericRating = Number(ratingData.rating_value);
@@ -73,7 +76,7 @@ export default function ReviewEditor({ tmdbId, mediaType }: ReviewEditorProps) {
         .eq("user_id", user.id)
         .eq("tmdb_id", tmdbId)
         .eq("media_type", mediaType)
-        .single();
+        .maybeSingle();
 
       const ratingPayload: any = {
         user_id: user.id,
@@ -112,7 +115,12 @@ export default function ReviewEditor({ tmdbId, mediaType }: ReviewEditorProps) {
   if (!user) {
     return (
       <div className="bg-card-surface p-6 rounded-xl">
-        <p className="text-text-muted">Sign in to rate and review this title.</p>
+        <p className="text-text-muted">
+          <Link href={`/signup?next=${encodeURIComponent(pathname)}`} className="text-accent-yellow font-semibold hover:underline">
+            Sign up free
+          </Link>{" "}
+          to rate and review this title.
+        </p>
       </div>
     );
   }

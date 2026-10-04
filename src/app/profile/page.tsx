@@ -11,6 +11,10 @@ import { getTvDetails, getMovieDetails } from "@/lib/tmdb";
 import FavoritesTab from "@/components/profile/FavoritesTab";
 import ReviewsTab from "@/components/profile/ReviewsTab";
 import BadgesTab from "@/components/profile/BadgesTab";
+import ProfileInsights from "@/components/profile/ProfileInsights";
+import NotificationSettings from "@/components/profile/NotificationSettings";
+import { authFetch } from "@/lib/auth-fetch";
+import { track } from "@/lib/analytics";
 
 interface Stats {
   totalShows: number;
@@ -52,6 +56,12 @@ export default function ProfilePage() {
   const [deleteReason, setDeleteReason] = useState("other");
   const [deleteComments, setDeleteComments] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  // Deep link from onboarding: /profile?import=1
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("import") === "1") setShowImport(true);
+  }, []);
 
   // Import state
   const [importing, setImporting] = useState(false);
@@ -64,6 +74,16 @@ export default function ProfilePage() {
     imported: number;
     errors: string[];
   } | null>(null);
+
+  // Warn before leaving mid-import; the import runs in this tab.
+  useEffect(() => {
+    if (!importing) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [importing]);
 
   // Auth guard
   useEffect(() => {
@@ -179,7 +199,7 @@ export default function ProfilePage() {
           .from("user_preferences")
           .select("watch_country, preferred_languages, favorite_genres, favorite_actors")
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
 
         if (preferenceData) {
           setPreferredCountry(preferenceData.watch_country || "");
@@ -231,12 +251,14 @@ export default function ProfilePage() {
   }, [user]);
 
   const handleSaveName = async () => {
-    if (!displayName.trim()) return;
+    const name = displayName.trim().slice(0, 40);
+    if (!name || !user) return;
     setSavingName(true);
     try {
-      await getSupabase().auth.updateUser({
-        data: { display_name: displayName.trim() },
-      });
+      await getSupabase().auth.updateUser({ data: { display_name: name } });
+      await getSupabase()
+        .from("profiles")
+        .upsert({ id: user.id, display_name: name, updated_at: new Date().toISOString() });
     } catch {
       // silently fail
     }
@@ -286,6 +308,7 @@ export default function ProfilePage() {
     try {
       const res = await parseImportZip(file, user, setProgress);
       setImportResult(res);
+      track("import_completed", { imported: res.imported, errors: res.errors.length });
     } catch {
       setImportResult({ imported: 0, errors: ["Failed to process the file."] });
     } finally {
@@ -297,71 +320,26 @@ export default function ProfilePage() {
   const handleDeleteAccount = async () => {
     if (!user) return;
     setDeleting(true);
+    setDeleteError("");
     try {
-      const supabase = getSupabase();
-      // Try server-side deletion first (requires SUPABASE_SERVICE_ROLE_KEY configured server-side)
-      try {
-        const sess = await supabase.auth.getSession();
-        const accessToken = sess?.data?.session?.access_token;
-        if (accessToken) {
-          const res = await fetch("/api/delete-account", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({ reason: deleteReason, comments: deleteComments }),
-          });
-
-          if (res.ok) {
-            await supabase.auth.signOut();
-            router.push("/");
-            setDeleting(false);
-            setShowDeleteModal(false);
-            return;
-          }
-          // otherwise fall through to client-side deletion
-          console.error("Server delete-account responded with", res.status);
-        }
-      } catch (e) {
-        console.error("Server-side delete attempt failed", e);
+      const res = await authFetch("/api/delete-account", {
+        method: "POST",
+        body: JSON.stringify({ reason: deleteReason, comments: deleteComments }),
+      });
+      if (!res.ok) {
+        // Never wipe data client-side while leaving the login alive.
+        setDeleteError("We couldn't delete your account right now. Nothing was removed — please try again or contact us.");
+        return;
       }
-
-      // Fallback: delete via client (best-effort)
-      const tables = [
-        "watch_history",
-        "tracked_shows",
-        "user_ratings",
-        "user_comments",
-        "user_preferences",
-      ];
-
-      await Promise.all(
-        tables.map(async (t) => {
-          try {
-            await supabase.from(t).delete().eq("user_id", user.id);
-          } catch (e) {
-            // best-effort client-side deletion; ignore errors
-          }
-        })
-      );
-
-      try {
-        await supabase.from("account_deletions").insert({
-          user_id: user.id,
-          reason: deleteReason,
-          comments: deleteComments || null,
-          deleted_at: new Date().toISOString(),
-        });
-      } catch {}
-
-      await supabase.auth.signOut();
+      track("account_deleted", { reason: deleteReason });
+      await getSupabase().auth.signOut();
+      setShowDeleteModal(false);
       router.push("/");
     } catch (e) {
-      console.error("Failed to delete account data", e);
+      console.error("Failed to delete account", e);
+      setDeleteError("We couldn't reach the server. Nothing was removed — please try again.");
     } finally {
       setDeleting(false);
-      setShowDeleteModal(false);
     }
   };
 
@@ -481,6 +459,8 @@ export default function ProfilePage() {
             </div>
           ) : null}
         </section>
+
+        <ProfileInsights userId={user.id} displayName={displayName} />
 
         {/* Tab Navigation */}
         <div className="flex gap-6 mt-8 mb-6 border-b border-white/10 overflow-x-auto scrollbar-hide px-1">
@@ -624,6 +604,8 @@ export default function ProfilePage() {
           )}
         </section>
 
+        <NotificationSettings userId={user.id} />
+
         {/* Preferences section (collapsed by default) */}
         <section className="mt-6 space-y-4">
           <div className="bg-card-surface rounded-xl">
@@ -763,6 +745,8 @@ export default function ProfilePage() {
               rows={4}
               className="w-full rounded-2xl border border-white/10 bg-bg-primary px-3 py-2 mb-4"
             />
+
+            {deleteError && <p className="text-sm text-red-400 mb-3">{deleteError}</p>}
 
             <div className="flex items-center justify-end gap-2">
               <button

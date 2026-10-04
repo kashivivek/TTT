@@ -1,142 +1,85 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { escapeHtml, getAdminClient, getUserFromRequest } from "@/lib/server-auth";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
+const USER_TABLES = [
+  "watch_history",
+  "tracked_shows",
+  "user_ratings",
+  "user_comments",
+  "user_emotions",
+  "user_favorites",
+  "user_badges",
+  "user_preferences",
+  "comment_reactions",
+  "comment_reports",
+  "push_subscriptions",
+  "notification_preferences",
+];
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const authHeader = request.headers.get("authorization") || "";
-    let accessToken = "";
-    if (authHeader.toLowerCase().startsWith("bearer ")) {
-      accessToken = authHeader.slice(7).trim();
-    } else {
-      accessToken = body?.access_token || "";
+    const user = await getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ error: "Invalid or missing session" }, { status: 401 });
     }
 
-    const deletionReason = (body?.reason as string) || "unspecified";
-    const deletionComments = (body?.comments as string) || "";
-
-    if (!accessToken) {
-      return NextResponse.json({ error: "Missing access token" }, { status: 401 });
-    }
-
-    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+    const admin = getAdminClient();
+    if (!admin) {
       console.error("Supabase service role key not configured");
       return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
     }
 
-    // Resolve user using provided access token
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        ...(anonKey ? { apikey: anonKey } : {}),
-      },
+    const body = await request.json().catch(() => ({}));
+    const reason = typeof body?.reason === "string" ? body.reason.slice(0, 50) : "unspecified";
+    const comments = typeof body?.comments === "string" ? body.comments.slice(0, 2000) : "";
+
+    const { error: logError } = await admin.from("account_deletions").insert({
+      user_id: user.id,
+      user_email: user.email || null,
+      reason,
+      comments: comments || null,
+      created_at: new Date().toISOString(),
     });
+    if (logError) console.error("Failed to insert account_deletions record", logError.message);
 
-    if (!userRes.ok) {
-      const txt = await userRes.text().catch(() => "");
-      console.error("Failed to validate token", userRes.status, txt);
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
-
-    const user = await userRes.json();
-    const uid = user?.id;
-    if (!uid) {
-      return NextResponse.json({ error: "Unable to resolve user" }, { status: 404 });
-    }
-
-    const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-
-    // Record the deletion request in account_deletions first (best-effort)
-    try {
-      await supabaseAdmin.from("account_deletions").insert({
-        user_id: uid,
-        user_email: user?.email || null,
-        reason: deletionReason,
-        comments: deletionComments || null,
-        created_at: new Date().toISOString(),
-      });
-    } catch (e) {
-        const msg = (e as any)?.message ?? String(e);
-        console.error("Failed to insert account_deletions record", msg);
-    }
-
-    // Send deletion email (best-effort) using Resend if configured — reuse feedback flow
-    try {
-      const apiKey = process.env.RESEND_API_KEY;
-      if (!apiKey) {
-        console.warn("RESEND_API_KEY is not set. Skipping deletion email.");
-      } else {
-        const subject = `[TTT Account Deletion] ${deletionReason} from ${user?.email || "Unknown"}`;
-        const html = `
-          <h2>Account Deletion Requested</h2>
-          <p><strong>User ID:</strong> ${uid}</p>
-          <p><strong>User Email:</strong> ${user?.email || "Not provided"}</p>
-          <p><strong>Reason:</strong> ${deletionReason}</p>
-          <p><strong>Comments:</strong></p>
-          <blockquote style="border-left: 4px solid #eee; padding-left: 10px; color: #555;">${(deletionComments || "").replace(/\n/g, "<br/>")}</blockquote>
-          <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
-        `;
-
+    const apiKey = process.env.RESEND_API_KEY;
+    if (apiKey) {
+      try {
         const res = await fetch("https://api.resend.com/emails", {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
+          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            from: "TV Time Tracker <onboarding@resend.dev>",
-            to: "kashivivek@gmail.com",
-            reply_to: user?.email || "kashivivek@gmail.com",
-            subject,
-            html,
+            from: process.env.RESEND_FROM || "TV Time Tracker <onboarding@resend.dev>",
+            to: process.env.ADMIN_EMAIL || "kashivivek@gmail.com",
+            subject: `[TTT Account Deletion] ${reason}`.replace(/[\r\n]/g, " "),
+            html: `
+              <h2>Account Deletion</h2>
+              <p><strong>User ID:</strong> ${escapeHtml(user.id)}</p>
+              <p><strong>User Email:</strong> ${escapeHtml(user.email || "Not provided")}</p>
+              <p><strong>Reason:</strong> ${escapeHtml(reason)}</p>
+              <blockquote style="border-left: 4px solid #eee; padding-left: 10px; color: #555;">${escapeHtml(comments).replace(/\n/g, "<br/>")}</blockquote>
+            `,
           }),
         });
-
-        if (!res.ok) {
-          const txt = await res.text().catch(() => "");
-          console.error("Resend email failed", res.status, txt);
-        }
+        if (!res.ok) console.error("Resend email failed", res.status);
+      } catch (e) {
+        console.error("Failed to send deletion email", e);
       }
-    } catch (e) {
-        const msg = (e as any)?.message ?? String(e);
-        console.error("Failed to send deletion email", msg);
     }
 
-    // Best-effort: remove application data owned by the user (exclude account_deletions)
-    const tables = [
-      "watch_history",
-      "tracked_shows",
-      "user_ratings",
-      "user_comments",
-      "user_preferences",
-    ];
-
+    // Tables created by the migration cascade on auth.users delete; older ones may not.
     await Promise.all(
-      tables.map(async (t) => {
-        try {
-          await supabaseAdmin.from(t).delete().eq("user_id", uid);
-        } catch (e) {
-          const msg = (e as any)?.message ?? String(e);
-          console.error(`Failed deleting from ${t}`, msg);
-        }
+      USER_TABLES.map(async (t) => {
+        const { error } = await admin.from(t).delete().eq("user_id", user.id);
+        if (error && error.code !== "42P01") console.error(`Failed deleting from ${t}`, error.message);
       })
     );
+    await admin.from("profiles").delete().eq("id", user.id);
 
-    // Finally delete the auth user
-    try {
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(uid);
-      if (error) {
-        console.error("Failed to delete auth user", error.message || error);
-        return NextResponse.json({ error: "Failed to delete auth user" }, { status: 500 });
-      }
-    } catch (e) {
-      console.error("Error deleting auth user", e);
-      return NextResponse.json({ error: "Failed to delete auth user" }, { status: 500 });
+    const { error } = await admin.auth.admin.deleteUser(user.id);
+    if (error) {
+      console.error("Failed to delete auth user", error.message);
+      return NextResponse.json({ error: "Failed to delete account" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

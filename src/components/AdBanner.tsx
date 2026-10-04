@@ -15,12 +15,12 @@ export default function AdBanner({
   format = "auto",
   responsive = true 
 }: AdBannerProps) {
-  const adClient = process.env.NEXT_PUBLIC_ADSENSE_PUB_ID;
+  const adClient = process.env.NEXT_PUBLIC_ADSENSE_PUB_ID || "ca-pub-9050370531125390";
   const isDev = process.env.NODE_ENV === "development";
   const adLoaded = useRef(false);
 
   useEffect(() => {
-    if (adClient && !isDev && !adLoaded.current) {
+    if (adSlot && !isDev && !adLoaded.current) {
       try {
         // @ts-ignore
         (window.adsbygoogle = window.adsbygoogle || []).push({});
@@ -29,9 +29,12 @@ export default function AdBanner({
         console.error("AdSense error:", e);
       }
     }
-  }, [adClient, isDev]);
+  }, [adSlot, isDev]);
 
-  if (adClient && !isDev) {
+  // Never show a fake "Your Ad Here" box to real users.
+  if (!isDev && !adSlot) return null;
+
+  if (!isDev) {
     return (
       <div className={`ad-container ${className}`}>
         <ins

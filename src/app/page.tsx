@@ -7,24 +7,34 @@ import AdBanner from "@/components/AdBanner";
 
 const FEATURES = [
   {
-    icon: "✨",
-    title: "AI Recommendation Search",
-    desc: "Ask for a mood, genre, or title and get smart TV Time suggestions from trending movies and shows.",
+    icon: "📥",
+    title: "Import from TV Time",
+    desc: "Bring your full watch history, ratings and badges over from a TV Time data export in minutes.",
   },
   {
-    icon: "📝",
-    title: "Review & Rating",
-    desc: "Rate what you watched and leave a review. Your personal ratings stay separate from community comments.",
+    icon: "🔔",
+    title: "New Episode Alerts",
+    desc: "Get an email or push notification the day a show you track airs a new episode.",
+  },
+  {
+    icon: "🗓️",
+    title: "Upcoming Calendar",
+    desc: "See everything airing this week across all your shows, plus what you missed.",
+  },
+  {
+    icon: "✨",
+    title: "AI Recommendations",
+    desc: "Ask for a mood, genre, or vibe — or let us suggest picks based on what you've watched.",
   },
   {
     icon: "📺",
     title: "Where to Watch",
-    desc: "See streaming providers for movies and shows so you can find the best place to watch instantly.",
+    desc: "See streaming providers for your country so you can find the best place to watch instantly.",
   },
   {
-    icon: "💬",
-    title: "Community Feedback",
-    desc: "Browse public comments and community discussion about shows without mixing them into your private reviews.",
+    icon: "🔥",
+    title: "Streaks, Badges & Recaps",
+    desc: "Keep your watch streak alive, earn badges, and share your year in TV with friends.",
   },
 ];
 
@@ -39,8 +49,8 @@ export default function HomePage() {
     }
   }, [user, loading, router]);
 
-  // Show nothing while checking auth (prevents flash)
-  if (loading || user) {
+  // Render the landing page during the auth check so crawlers and first-time visitors see content
+  if (user) {
     return null;
   }
 
@@ -88,8 +98,8 @@ export default function HomePage() {
           </h1>
         </div>
         <p className="text-text-muted text-lg sm:text-xl max-w-xl mx-auto mb-8 leading-relaxed">
-          Track every episode. React with emotions. Never lose your watch
-          history. The modern tracker for binge watchers.
+          The free TV Time alternative. Track every episode, get alerts when new
+          ones air, and import your full TV Time history.
         </p>
         <div className="flex gap-4">
           {user ? (

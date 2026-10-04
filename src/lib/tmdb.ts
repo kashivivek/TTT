@@ -25,6 +25,14 @@ export interface TMDbRegionWatchProviders {
   free?: TMDbProviderItem[];
 }
 
+export interface TMDbEpisodeRef {
+  season_number: number;
+  episode_number: number;
+  name: string;
+  air_date: string | null;
+  still_path?: string | null;
+}
+
 export interface WatchProvidersResponse {
   id: number;
   results: Record<string, TMDbRegionWatchProviders>;
@@ -99,7 +107,10 @@ export async function getTvDetails(tmdbId: number) {
       season_number: number;
       episode_count: number;
       name: string;
+      air_date?: string | null;
     }>;
+    next_episode_to_air?: TMDbEpisodeRef | null;
+    last_episode_to_air?: TMDbEpisodeRef | null;
     credits?: {
       cast: Array<{ id: number; name: string; character: string; profile_path: string | null }>;
     };

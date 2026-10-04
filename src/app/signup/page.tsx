@@ -1,17 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { safeNext } from "@/lib/safe-redirect";
+import { track } from "@/lib/analytics";
 
 export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+function SignupForm() {
   const { signUp } = useAuth();
   const router = useRouter();
+  const next = safeNext(useSearchParams().get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkEmail, setCheckEmail] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,14 +36,35 @@ export default function SignupPage() {
     }
 
     setLoading(true);
-    const result = await signUp(email, password);
+    const result = await signUp(email, password, next);
     if (result.error) {
       setError(result.error);
       setLoading(false);
+      return;
+    }
+    track("sign_up", { next });
+    if (result.needsConfirmation) {
+      setCheckEmail(true);
+      setLoading(false);
     } else {
-      router.push("/dashboard");
+      router.push(next);
     }
   };
+
+  if (checkEmail) {
+    return (
+      <main className="min-h-screen flex items-center justify-center px-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="text-5xl mb-4">📬</div>
+          <h1 className="text-2xl font-extrabold mb-2">Check your email</h1>
+          <p className="text-text-muted">
+            We sent a confirmation link to <strong className="text-text-primary">{email}</strong>. Click it to finish
+            creating your account.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen flex items-center justify-center px-4">
@@ -98,9 +132,9 @@ export default function SignupPage() {
 
         <p className="text-text-muted text-sm text-center mt-6">
           Already have an account?{" "}
-          <a href="/login" className="text-accent-yellow hover:underline">
+          <Link href={`/login${next !== "/dashboard" ? `?next=${encodeURIComponent(next)}` : ""}`} className="text-accent-yellow hover:underline">
             Log in
-          </a>
+          </Link>
         </p>
       </div>
     </main>

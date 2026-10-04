@@ -1,6 +1,11 @@
 # Allow all standard search crawlers
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /calendar
+Disallow: /update-password
 
 # Explicitly permit Google AdSense review crawlers
 User-agent: Mediapartners-Google
@@ -8,6 +13,11 @@ Allow: /
 
 User-agent: Googlebot
 Allow: /
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /calendar
+Disallow: /update-password
 
 # Link to your sitemap
 Sitemap: https://tvtime.online/sitemap.xml

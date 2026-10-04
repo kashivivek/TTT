@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/components/AuthProvider";
+import { authFetch } from "@/lib/auth-fetch";
 
 export default function FeedbackWidget() {
-  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [type, setType] = useState("Bug");
   const [message, setMessage] = useState("");
@@ -16,15 +15,9 @@ export default function FeedbackWidget() {
 
     setStatus("loading");
     try {
-      const res = await fetch("/api/feedback", {
+      const res = await authFetch("/api/feedback", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          type, 
-          message,
-          userId: user?.id,
-          userEmail: user?.email
-        }),
+        body: JSON.stringify({ type, message }),
       });
 
       if (res.ok) {

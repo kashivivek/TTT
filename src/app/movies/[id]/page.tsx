@@ -1,419 +1,72 @@
-"use client";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { tmdbServer } from "@/lib/tmdb-server";
+import MovieDetailsClient from "./MovieDetailsClient";
 
-import { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/components/AuthProvider";
-import {
-  getMovieDetails,
-  getMovieWatchProviders,
-  backdropUrl,
-  posterUrl,
-  logoUrl,
-  sortWatchProviderRegions,
-} from "@/lib/tmdb";
-import { getSupabase } from "@/lib/supabase";
-import BottomNav from "@/components/BottomNav";
-import UserReviewWidget from "@/components/UserReviewWidget";
-import WatchCountrySelector from "@/components/WatchCountrySelector";
-import ReviewEditor from "@/components/ReviewEditor";
-import CommunityTab from "@/components/CommunityTab";
+export const revalidate = 86400;
 
-type Tab = "about" | "cast" | "community";
+// Pages are generated on first request and cached for a day.
+export async function generateStaticParams() {
+  return [];
+}
 
-export default function MovieDetailsPage(props: { params: Promise<{ id: string }> }) {
-  const params = use(props.params);
-  const tmdbId = parseInt(params.id, 10);
+type Params = Promise<{ id: string }>;
 
-  const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
-
-  const [details, setDetails] = useState<any>(null);
-  const [providers, setProviders] = useState<any | null>(null);
-  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
-  const [preferredCountry, setPreferredCountry] = useState<string | null>(null);
-  const [isSavingCountry, setIsSavingCountry] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>("about");
-  const [isTracked, setIsTracked] = useState(false);
-  const [isWatched, setIsWatched] = useState(false);
-
-  useEffect(() => {
-    getMovieDetails(tmdbId).then(setDetails).catch(console.error);
-    getMovieWatchProviders(tmdbId).then(setProviders).catch(() => setProviders(null));
-  }, [tmdbId]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const loadPreference = async () => {
-      const db = getSupabase();
-      const { data, error } = await db
-        .from("user_preferences")
-        .select("watch_country")
-        .eq("user_id", user.id)
-        .single();
-
-      if (!error && data?.watch_country) {
-        setPreferredCountry(data.watch_country);
-      }
-    };
-
-    loadPreference().catch(console.error);
-  }, [user]);
-
-  useEffect(() => {
-    if (!providers) return;
-    const availableRegions = Object.keys(providers.results || {});
-    const defaultCountry = preferredCountry && availableRegions.includes(preferredCountry)
-      ? preferredCountry
-      : availableRegions.includes("US")
-        ? "US"
-        : availableRegions[0] || null;
-
-    if (defaultCountry && defaultCountry !== selectedCountry) {
-      setSelectedCountry(defaultCountry);
-    }
-  }, [providers, preferredCountry, selectedCountry]);
-
-  // Load tracking status and watched history
-  useEffect(() => {
-    if (!user) return;
-    
-    const loadUserData = async () => {
-      const db = getSupabase();
-      
-      // Check if tracked
-      const { data: trackData } = await db
-        .from("tracked_shows")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("tmdb_id", tmdbId)
-        .single();
-        
-      if (trackData) setIsTracked(true);
-
-      // Load watch history for this movie
-      const { data: history } = await db
-        .from("watch_history")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("tmdb_id", tmdbId)
-        .eq("media_type", "movie")
-        .limit(1);
-        
-      if (history && history.length > 0) {
-        setIsWatched(true);
-      }
-    };
-    
-    loadUserData();
-  }, [user, tmdbId]);
-
-  const handleCountryChange = async (country: string) => {
-    setSelectedCountry(country);
-    if (!user) return;
-
-    setIsSavingCountry(true);
-    try {
-      await getSupabase().from("user_preferences").upsert(
-        {
-          user_id: user.id,
-          watch_country: country,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" }
-      );
-      setPreferredCountry(country);
-    } catch (err) {
-      console.error("Failed to save watch country", err);
-    } finally {
-      setIsSavingCountry(false);
-    }
-  };
-
-  const handleTrackShow = async () => {
-    if (!user || isTracked || !details) return;
-    
-    try {
-      // We just insert. We already checked isTracked at the top, 
-      // but to be absolutely safe from constraints without onConflict, we can just insert.
-      await getSupabase().from("tracked_shows").insert({
-        user_id: user.id,
-        tmdb_id: tmdbId,
-        name: details.title,
-        media_type: "movie",
-        backdrop_path: details.backdrop_path,
-        current_season: 0,
-        current_episode: 0,
-        episode_title: "",
-        updated_at: new Date().toISOString(),
-      });
-      setIsTracked(true);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const toggleWatched = async () => {
-    if (!user) return;
-    
-    const db = getSupabase();
-    
-    try {
-      if (isWatched) {
-        // Unwatch
-        await db.from("watch_history")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("tmdb_id", tmdbId)
-          .eq("media_type", "movie");
-          
-        setIsWatched(false);
-      } else {
-        // Watch
-        await db.from("watch_history").insert({
-          user_id: user.id,
-          tmdb_id: tmdbId,
-          media_type: "movie",
-        });
-        
-        setIsWatched(true);
-
-        if (isTracked) {
-          // If it was tracked, update its media_type to completed_movie
-          await db.from("tracked_shows")
-            .update({
-              media_type: "completed_movie",
-              updated_at: new Date().toISOString()
-            })
-            .eq("user_id", user.id)
-            .eq("tmdb_id", tmdbId);
-        } else {
-          // If it wasn't tracked, insert it as completed_movie so it shows in Completed
-          await db.from("tracked_shows").insert({
-            user_id: user.id,
-            tmdb_id: tmdbId,
-            name: details.title,
-            media_type: "completed_movie",
-            backdrop_path: details.backdrop_path,
-            current_season: 0,
-            current_episode: 0,
-            episode_title: "",
-            updated_at: new Date().toISOString(),
-          });
-          setIsTracked(true);
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  if (!details) {
-    return (
-      <main className="min-h-screen flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-accent-yellow border-t-transparent rounded-full animate-spin" />
-      </main>
-    );
+async function getMovie(id: string) {
+  const tmdbId = Number.parseInt(id, 10);
+  if (!Number.isFinite(tmdbId) || tmdbId <= 0) return null;
+  try {
+    return await tmdbServer<any>(`/movie/${tmdbId}?append_to_response=credits`, 86400);
+  } catch (e) {
+    // Transient TMDB errors must not be cached as a 404
+    if (e instanceof Error && e.message === "TMDb 404") return null;
+    throw e;
   }
+}
+
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const { id } = await params;
+  const movie = await getMovie(id);
+  if (!movie) return { title: "Movie not found | TV Time Tracker" };
+
+  const year = movie.release_date ? ` (${movie.release_date.slice(0, 4)})` : "";
+  const title = `${movie.title}${year} – Where to Watch, Reviews & Tracker`;
+  const description =
+    (movie.overview ? `${movie.overview.slice(0, 150)}… ` : "") +
+    `See where to stream ${movie.title}, rate it, and add it to your watchlist.`;
+  const image = movie.backdrop_path ? `https://image.tmdb.org/t/p/w1280${movie.backdrop_path}` : undefined;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: `/movies/${movie.id}` },
+    openGraph: { title, description, type: "video.movie", url: `/movies/${movie.id}`, images: image ? [image] : undefined },
+    twitter: { card: "summary_large_image", title, description, images: image ? [image] : undefined },
+  };
+}
+
+export default async function MoviePage({ params }: { params: Params }) {
+  const { id } = await params;
+  const movie = await getMovie(id);
+  if (!movie) notFound();
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Movie",
+    name: movie.title,
+    description: movie.overview,
+    image: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : undefined,
+    datePublished: movie.release_date || undefined,
+    genre: movie.genres?.map((g: { name: string }) => g.name),
+  };
 
   return (
-    <main className="min-h-screen pb-24">
-      {/* Hero Header */}
-      <div className="relative h-64 sm:h-80 w-full">
-        {details.backdrop_path ? (
-          <img 
-            src={backdropUrl(details.backdrop_path)} 
-            alt={details.name}
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 bg-gray-800" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-bg-primary via-bg-primary/50 to-transparent" />
-        
-        <div className="absolute bottom-0 left-0 w-full px-4 pb-4">
-          <div className="max-w-5xl mx-auto flex items-end justify-between">
-            <div>
-              <button 
-                onClick={() => router.back()} 
-                className="mb-4 text-text-muted hover:text-white flex items-center gap-2"
-              >
-                ← Back
-              </button>
-              <h1 className="text-3xl sm:text-5xl font-extrabold text-white mb-2">{details.title}</h1>
-              <p className="text-text-muted text-sm sm:text-base">
-                {details.status}
-              </p>
-            </div>
-            
-            <button
-              onClick={handleTrackShow}
-              disabled={isTracked}
-              className={`px-5 py-2.5 rounded-full font-bold transition-all flex items-center gap-2
-                ${isTracked 
-                  ? "bg-gray-800 text-accent-yellow border border-gray-700 opacity-80 cursor-default" 
-                  : "bg-accent-yellow text-bg-primary hover:brightness-110"
-                }`}
-            >
-              {isTracked ? (
-                <>✓ Tracked</>
-              ) : (
-                <>+ Add Movie</>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-4 mt-6">
-        {/* Tabs */}
-        <div className="flex border-b border-card-surface mb-6 overflow-x-auto">
-          {(["about", "cast", "community"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`pb-3 px-6 font-bold text-sm tracking-wide transition-colors ${
-                activeTab === tab ? "border-b-2 border-accent-yellow text-white" : "text-text-muted hover:text-white"
-              }`}
-            >
-              {tab.toUpperCase()}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab Content */}
-        {activeTab === "about" && (
-        <div className="space-y-6">
-          <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-            <div className="bg-card-surface p-6 rounded-xl">
-              <h2 className="text-xl font-bold mb-4">About the Movie</h2>
-              <div className="flex gap-4 items-start">
-                {details.poster_path && (
-                  <img src={posterUrl(details.poster_path)} alt="Poster" className="w-24 rounded-lg hidden sm:block" />
-                )}
-                <div>
-                  <p className="text-text-muted text-sm mb-2">
-                    {details.release_date ? details.release_date.split("-")[0] : ""} • {details.genres?.map((g: any) => g.name).join(", ")}
-                  </p>
-                  <p className="text-sm leading-relaxed">{details.overview || "No overview available."}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-card-surface p-6 rounded-xl">
-              <div className="flex items-center justify-between gap-4 mb-4">
-                <h2 className="text-xl font-bold">Reviews</h2>
-                <span className="text-sm text-text-muted">Optional</span>
-              </div>
-              <div className="space-y-4">
-                <ReviewEditor tmdbId={tmdbId} mediaType="movie" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-card-surface p-6 rounded-xl">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-              <div>
-                <h2 className="text-xl font-bold">Where to Watch</h2>
-                <p className="text-sm text-text-muted">Your preferred region is shown here.</p>
-              </div>
-              <WatchCountrySelector
-                providers={providers}
-                value={selectedCountry}
-                onChange={handleCountryChange}
-              />
-            </div>
-            {!providers ? (
-              <p className="text-text-muted">Loading providers...</p>
-            ) : Object.keys(providers.results || {}).length === 0 ? (
-              <p className="text-text-muted">No provider data available.</p>
-            ) : (
-              <>
-                {selectedCountry && providers.results[selectedCountry] ? (
-                  <div className="space-y-4">
-                    <p className="text-sm text-text-muted mb-2">
-                      Showing providers for <strong>{selectedCountry}</strong>{isSavingCountry ? " — saving..." : ""}
-                    </p>
-                    <div className="grid gap-4 lg:grid-cols-3">
-                      {( ["flatrate", "rent", "buy"] as const ).map((tier) => {
-                        const items = providers.results[selectedCountry][tier];
-                        if (!items || items.length === 0) return null;
-                        return (
-                          <div key={tier} className="rounded-2xl border border-white/10 bg-black/30 p-3">
-                            <p className="text-xs uppercase tracking-[0.2em] text-text-muted mb-3">{tier === "flatrate" ? "Streaming" : tier === "rent" ? "Rent" : "Buy"}</p>
-                            <div className="grid gap-2">
-                              {items.map((provider: any) => (
-                                <a
-                                  key={provider.provider_id}
-                                  href={providers.results[selectedCountry]?.link || "#"}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-xl transition hover:bg-white/10"
-                                >
-                                  {provider.logo_path ? (
-                                    <img src={logoUrl(provider.logo_path)} alt={provider.provider_name} className="w-6 h-6 object-contain" />
-                                  ) : null}
-                                  <span className="text-xs">{provider.provider_name}</span>
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-text-muted">Selected country has no provider data.</p>
-                )}
-              </>
-            )}
-          </div>
-
-          <div className="bg-card-surface p-6 rounded-xl flex items-center justify-between">
-            <div>
-               <h3 className="font-bold text-lg">Mark as Watched</h3>
-               <p className="text-text-muted text-sm">Add this movie to your watch history</p>
-            </div>
-            <button
-               onClick={toggleWatched}
-               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                 isWatched 
-                   ? "bg-accent-yellow text-black" 
-                   : "bg-white/10 hover:bg-white/20 text-transparent hover:text-white"
-               }`}
-             >
-               ✓
-            </button>
-          </div>
-          </div>
-        )}
-
-        {activeTab === "cast" && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {details.credits?.cast?.map((actor: any) => (
-              <div key={actor.id} className="bg-card-surface rounded-xl overflow-hidden text-center hover:ring-2 hover:ring-accent-yellow transition-all">
-                {actor.profile_path ? (
-                  <img src={posterUrl(actor.profile_path)} alt={actor.name} className="w-full h-48 object-cover" />
-                ) : (
-                  <div className="w-full h-48 bg-gray-800 flex items-center justify-center text-text-muted text-3xl">?</div>
-                )}
-                <div className="p-3">
-                  <p className="font-bold text-sm truncate" title={actor.name}>{actor.name}</p>
-                  <p className="text-xs text-text-muted truncate mt-1" title={actor.character}>{actor.character}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeTab === "community" && (
-          <div className="space-y-6">
-            <CommunityTab tmdbId={tmdbId} mediaType="movie" />
-          </div>
-        )}
-      </div>
-      
-      <BottomNav />
-    </main>
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+      />
+      <MovieDetailsClient tmdbId={movie.id} initialDetails={movie} />
+    </>
   );
 }

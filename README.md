@@ -26,13 +26,23 @@ You will need Node.js installed, as well as a Supabase project and a TMDB Develo
 
 ### Environment Variables
 
-Create a `.env.local` file in the root directory and add your keys:
+Copy `.env.local.example` to `.env.local` and fill in the values. The same variables must be set in Vercel (Project → Settings → Environment Variables). At minimum:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-NEXT_PUBLIC_TMDB_API_KEY=your_tmdb_api_key
+TMDB_API_KEY=your_tmdb_api_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+CRON_SECRET=a_long_random_string
 ```
+
+### Database
+
+Run `supabase/migrations/20261003000000_retention_and_security.sql` in the Supabase SQL editor. It is idempotent and adds Row Level Security, public profiles, comment reactions/reports, and notification tables.
+
+### Daily new-episode job
+
+`vercel.json` schedules `/api/cron/new-episodes` daily. It moves shows with new episodes back onto users' lists and sends email/push alerts. It requires `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, and optionally `RESEND_*` and `VAPID_*` (see `.env.local.example`).
 
 ### Installation
 

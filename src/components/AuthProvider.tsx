@@ -8,7 +8,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (email: string, password: string) => Promise<{ error?: string }>;
+  signUp: (email: string, password: string, next?: string) => Promise<{ error?: string; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error?: string }>;
   updatePassword: (password: string) => Promise<{ error?: string }>;
@@ -59,9 +59,13 @@ export default function AuthProvider({
     return { error: error?.message };
   };
 
-  const signUp = async (email: string, password: string) => {
-    const { error } = await getSupabase().auth.signUp({ email, password });
-    return { error: error?.message };
+  const signUp = async (email: string, password: string, next = "/dashboard") => {
+    const { data, error } = await getSupabase().auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}${next}` },
+    });
+    return { error: error?.message, needsConfirmation: !error && !data.session };
   };
 
   const signOut = async () => {

@@ -1,12 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { safeNext } from "@/lib/safe-redirect";
+import { track } from "@/lib/analytics";
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const { signIn } = useAuth();
   const router = useRouter();
+  const next = safeNext(useSearchParams().get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -22,7 +34,8 @@ export default function LoginPage() {
       setError(result.error);
       setLoading(false);
     } else {
-      router.push("/dashboard");
+      track("login");
+      router.push(next);
     }
   };
 
@@ -87,9 +100,9 @@ export default function LoginPage() {
 
         <p className="text-text-muted text-sm text-center mt-6">
           Don&apos;t have an account?{" "}
-          <a href="/signup" className="text-accent-yellow hover:underline">
+          <Link href={`/signup${next !== "/dashboard" ? `?next=${encodeURIComponent(next)}` : ""}`} className="text-accent-yellow hover:underline">
             Sign up
-          </a>
+          </Link>
         </p>
       </div>
     </main>

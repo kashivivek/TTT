@@ -5,7 +5,8 @@ import { createPortal } from "react-dom";
 import { useAuth } from "@/components/AuthProvider";
 import { getSupabase } from "@/lib/supabase";
 
-const CURRENT_VERSION = "v4";
+const CURRENT_VERSION = "v5";
+const NEW_ACCOUNT_MS = 3 * 24 * 60 * 60 * 1000;
 
 export default function WhatsNewWidget() {
   const { user } = useAuth();
@@ -20,11 +21,16 @@ export default function WhatsNewWidget() {
 
   useEffect(() => {
     if (user && !hasChecked) {
-      const lastSeen = user.user_metadata?.last_seen_whats_new;
-      if (lastSeen !== CURRENT_VERSION) {
-        setIsOpen(true);
-      }
       setHasChecked(true);
+      const lastSeen = user.user_metadata?.last_seen_whats_new;
+      if (lastSeen === CURRENT_VERSION) return;
+      // New accounts get onboarding instead of a changelog; don't stack pop-ups.
+      const isNewAccount = Date.now() - new Date(user.created_at).getTime() < NEW_ACCOUNT_MS;
+      if (isNewAccount) {
+        getSupabase().auth.updateUser({ data: { last_seen_whats_new: CURRENT_VERSION } }).catch(() => {});
+        return;
+      }
+      setIsOpen(true);
     }
   }, [user, hasChecked]);
 
@@ -70,13 +76,23 @@ export default function WhatsNewWidget() {
             </div>
             <div className="space-y-4">
                       <div>
-                        <h3 className="font-bold text-lg text-accent-yellow mb-1">AI-powered, personalized recommendations</h3>
+                        <h3 className="font-bold text-lg text-accent-yellow mb-1">New episode alerts &amp; calendar</h3>
                         <p className="text-sm text-text-muted leading-relaxed">
-                          Ask the app for mood- or title-based suggestions and get recommendations tailored to your recent watches — try the ✨ Suggest me something button.
+                          See everything airing this week in the new Upcoming tab, and turn on email or push alerts from your Profile so you never miss a new episode.
                         </p>
                       </div>
-
-                      {/* Removed account-deletion email copy and improved onboarding note per request */}
+                      <div>
+                        <h3 className="font-bold text-lg text-accent-yellow mb-1">Smarter progress</h3>
+                        <p className="text-sm text-text-muted leading-relaxed">
+                          Shows that get a new season now come back to your list automatically, and you can undo a mis-tapped episode.
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg text-accent-yellow mb-1">Streaks, badges &amp; your year in TV</h3>
+                        <p className="text-sm text-text-muted leading-relaxed">
+                          Keep your watch streak alive, earn badges, and share your recap with friends.
+                        </p>
+                      </div>
 
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <button
@@ -88,6 +104,7 @@ export default function WhatsNewWidget() {
                 </button>
                 {showPrevious && (
                   <ul className="mt-4 text-sm text-text-muted space-y-2 list-disc list-inside">
+                    <li>AI-powered, personalized recommendations with the ✨ Suggest me button.</li>
                     <li>Instant dashboard speed improvements and better TV Time import handling.</li>
                     <li>Movie tracking now keeps completed titles in your tracked list.</li>
                     <li>Season-level watched actions and feedback snooze support.</li>

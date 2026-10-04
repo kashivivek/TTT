@@ -103,7 +103,7 @@ export default function SearchAutocomplete({
         <div className="absolute top-full mt-1 w-full bg-card-surface rounded-xl overflow-hidden shadow-xl z-50 max-h-80 overflow-y-auto">
           {results.map((r) => (
             <button
-              key={r.id}
+              key={`${r.media_type}-${r.id}`}
               onClick={() => handleSelect(r)}
               className="w-full text-left px-4 py-3 hover:bg-bg-primary
                          transition-colors border-b border-bg-primary last:border-0 flex items-center gap-3"

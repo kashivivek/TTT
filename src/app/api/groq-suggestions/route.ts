@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getUserFromRequest } from "@/lib/server-auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const DEFAULT_GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
+const MAX_QUERY_LENGTH = 2000;
 
 interface TMDBItem {
   id: number;
@@ -25,8 +28,16 @@ function extractJsonArray(text: string): any[] | null {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const query = typeof body?.query === "string" ? body.query.trim() : "";
+  const user = await getUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: "Sign in to get suggestions" }, { status: 401 });
+  }
+  if (!rateLimit(`groq:${user.id}`, 20, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
+  const body = await request.json().catch(() => null);
+  const query = typeof body?.query === "string" ? body.query.trim().slice(0, MAX_QUERY_LENGTH) : "";
   if (!query) {
     return NextResponse.json({ error: "Missing query" }, { status: 400 });
   }
@@ -64,9 +75,6 @@ JSON Response (array of title strings):
 ["Title 1", "Title 2", "Title 3", "Title 4", "Title 5", "Title 6", "Title 7", "Title 8", "Title 9", "Title 10", "Title 11", "Title 12"]
 `;
 
-    console.log("=== ASKING LLM FOR TITLES ===");
-    console.log("User query:", query);
-
     const groqResponse = await fetch(groqApiUrl, {
       method: "POST",
       headers: {
@@ -90,24 +98,24 @@ JSON Response (array of title strings):
       }
     }
 
-    console.log("LLM suggested titles:", responseText);
-
     // Extract titles from LLM response
     const titles = extractJsonArray(responseText);
     if (!titles || titles.length === 0) {
       return NextResponse.json({ suggestions: [] });
     }
 
-    console.log("Parsed titles:", titles.slice(0, 6).join(", "));
-
     // Step 2: Search TMDB for each title and get the #1 most popular result
-    console.log("=== SEARCHING TMDB ===");
-    
-    const searchPromises = titles.slice(0, 12).map((title: string) =>
-      fetch(`${TMDB_BASE}/search/multi?api_key=${tmdbApiKey}&query=${encodeURIComponent(title)}&include_adult=false&sort_by=popularity.desc`)
-        .then(res => res.ok ? res.json() : null)
-        .catch(() => null)
-    );
+
+    const searchPromises = titles
+      .filter((title): title is string => typeof title === "string" && title.length > 0 && title.length < 200)
+      .slice(0, 12)
+      .map((title) =>
+        fetch(`${TMDB_BASE}/search/multi?api_key=${tmdbApiKey}&query=${encodeURIComponent(title)}&include_adult=false`, {
+          next: { revalidate: 86400 },
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .catch(() => null)
+      );
 
     const searchResults = await Promise.all(searchPromises);
 
@@ -136,9 +144,6 @@ JSON Response (array of title strings):
       
       if (suggestions.length >= 12) break;
     }
-
-    console.log("Final suggestions:", suggestions.map(s => s.title).join(", "));
-    console.log("Suggestions count:", suggestions.length);
 
     return NextResponse.json({ suggestions });
   } catch (error) {
