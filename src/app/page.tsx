@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import AdBanner from "@/components/AdBanner";
+import SiteFooter from "@/components/SiteFooter";
 
 const FEATURES = [
   {
@@ -158,25 +159,7 @@ export default function HomePage() {
         <AdBanner />
       </div>
 
-      {/* Footer */}
-      <footer className="border-t border-card-surface mt-10">
-        <div className="max-w-4xl mx-auto px-4 py-8 flex items-center justify-between">
-          <span className="text-text-muted text-xs">
-            TV Time Tracker &copy; {new Date().getFullYear()}
-          </span>
-          <span className="text-text-muted text-xs">
-            Powered by{" "}
-            <a
-              href="https://www.themoviedb.org/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-accent-yellow hover:underline"
-            >
-              TMDb
-            </a>
-          </span>
-        </div>
-      </footer>
+      <SiteFooter />
     </main>
   );
 }

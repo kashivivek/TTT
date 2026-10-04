@@ -19,6 +19,7 @@ import WatchCountrySelector from "@/components/WatchCountrySelector";
 import ReviewEditor from "@/components/ReviewEditor";
 import CommunityTab from "@/components/CommunityTab";
 import FavoriteButton from "@/components/FavoriteButton";
+import SiteFooter from "@/components/SiteFooter";
 
 type Tab = "about" | "episodes" | "cast" | "community";
 
@@ -576,6 +577,7 @@ export default function ShowDetailsClient({ tmdbId, initialDetails }: { tmdbId: 
         )}
       </div>
       
+      <SiteFooter />
       <BottomNav />
     </main>
   );

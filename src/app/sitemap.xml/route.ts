@@ -35,6 +35,10 @@ export async function GET() {
     { loc: `${BASE}/`, changefreq: "weekly", priority: 1.0 },
     { loc: `${BASE}/signup`, changefreq: "monthly", priority: 0.5 },
     { loc: `${BASE}/login`, changefreq: "monthly", priority: 0.3 },
+    { loc: `${BASE}/about`, changefreq: "monthly", priority: 0.5 },
+    { loc: `${BASE}/contact`, changefreq: "yearly", priority: 0.3 },
+    { loc: `${BASE}/privacy`, changefreq: "yearly", priority: 0.3 },
+    { loc: `${BASE}/terms`, changefreq: "yearly", priority: 0.3 },
     ...tvIds.map((id) => ({ loc: `${BASE}/shows/${id}`, changefreq: "weekly", priority: 0.7 })),
     ...movieIds.map((id) => ({ loc: `${BASE}/movies/${id}`, changefreq: "weekly", priority: 0.6 })),
   ];

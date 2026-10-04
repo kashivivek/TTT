@@ -13,6 +13,7 @@ import ReviewsTab from "@/components/profile/ReviewsTab";
 import BadgesTab from "@/components/profile/BadgesTab";
 import ProfileInsights from "@/components/profile/ProfileInsights";
 import NotificationSettings from "@/components/profile/NotificationSettings";
+import SiteFooter from "@/components/SiteFooter";
 import { authFetch } from "@/lib/auth-fetch";
 import { track } from "@/lib/analytics";
 
@@ -718,6 +719,7 @@ export default function ProfilePage() {
         </section>
       </div>
 
+      <SiteFooter />
       <BottomNav />
       {showDeleteModal && (
         <div className="fixed inset-0 flex items-center justify-center z-[9999]">
