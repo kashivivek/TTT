@@ -38,21 +38,32 @@ function isAfter(ep: EpisodeRef | null | undefined, season: number, episode: num
   return ep.season_number > season || (ep.season_number === season && ep.episode_number > episode);
 }
 
-async function pool<T>(items: T[], size: number, fn: (item: T) => Promise<void>) {
+async function pool<T>(items: T[], size: number, fn: (item: T) => Promise<void>, deadline = Infinity) {
   const queue = [...items];
   await Promise.all(
     Array.from({ length: size }, async () => {
-      while (queue.length > 0) await fn(queue.shift()!);
+      while (queue.length > 0 && Date.now() < deadline) await fn(queue.shift()!);
     })
   );
 }
 
+interface Pref {
+  user_id: string;
+  email_enabled: boolean;
+  push_enabled: boolean;
+}
+
 /**
- * Daily job (see vercel.json):
- *  1. Moves awaiting/completed shows back to "watch next" when new episodes air.
+ * Daily job (see vercel.json), scoped to users who turned on alerts:
+ *  1. Moves their awaiting/completed shows back to "watch next" when new episodes air.
  *  2. Sends email/push alerts for episodes airing today.
+ * Everyone else's shows are refreshed when they open the dashboard.
  */
 export async function GET(request: NextRequest) {
+  const started = Date.now();
+  // Leave headroom under Vercel's 60s limit to finish sending what we have.
+  const fetchDeadline = started + 35_000;
+
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -62,16 +73,30 @@ export async function GET(request: NextRequest) {
 
   const today = todayISO(new Date());
 
+  const { data: prefRows } = await admin
+    .from("notification_preferences")
+    .select("user_id, email_enabled, push_enabled")
+    .or("email_enabled.eq.true,push_enabled.eq.true");
+  const prefs = (prefRows || []) as Pref[];
+  if (prefs.length === 0) {
+    return NextResponse.json({ alertUsers: 0, note: "No users have alerts enabled" });
+  }
+
   const rows: TrackedRow[] = [];
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await admin
-      .from("tracked_shows")
-      .select("user_id, tmdb_id, name, media_type, current_season, current_episode, episode_title")
-      .in("media_type", ["tv", "awaiting", "completed"])
-      .range(from, from + 999);
-    if (error || !data || data.length === 0) break;
-    rows.push(...(data as TrackedRow[]));
-    if (data.length < 1000) break;
+  const alertUserIds = prefs.map((p) => p.user_id);
+  for (let i = 0; i < alertUserIds.length; i += 100) {
+    const chunk = alertUserIds.slice(i, i + 100);
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await admin
+        .from("tracked_shows")
+        .select("user_id, tmdb_id, name, media_type, current_season, current_episode, episode_title")
+        .in("user_id", chunk)
+        .in("media_type", ["tv", "awaiting", "completed"])
+        .range(from, from + 999);
+      if (error || !data || data.length === 0) break;
+      rows.push(...(data as TrackedRow[]));
+      if (data.length < 1000) break;
+    }
   }
 
   const memo = new Map<string, Promise<unknown>>();
@@ -80,14 +105,15 @@ export async function GET(request: NextRequest) {
     return memo.get(endpoint) as Promise<T>;
   };
 
+  const uniqueShows = Array.from(new Set(rows.map((r) => r.tmdb_id)));
   const details = new Map<number, ShowDetails>();
-  await pool(Array.from(new Set(rows.map((r) => r.tmdb_id))), 8, async (id) => {
+  await pool(uniqueShows, 10, async (id) => {
     try {
       details.set(id, await fetcher<ShowDetails>(`/tv/${id}`));
     } catch {
       // Skip this show today
     }
-  });
+  }, fetchDeadline);
 
   // 1. Resurface shows with new episodes
   let resurfaced = 0;
@@ -118,7 +144,7 @@ export async function GET(request: NextRequest) {
     } catch {
       // Retry tomorrow
     }
-  });
+  }, started + 45_000);
 
   // 2. Alerts for episodes airing today
   const airingToday = new Map<number, EpisodeRef>();
@@ -139,12 +165,9 @@ export async function GET(request: NextRequest) {
   let pushes = 0;
   const userIds = Array.from(perUser.keys());
   if (userIds.length > 0) {
-    const { data: prefs } = await admin
-      .from("notification_preferences")
-      .select("user_id, email_enabled, push_enabled")
-      .in("user_id", userIds);
+    const alertPrefs = prefs.filter((p) => perUser.has(p.user_id));
 
-    await pool(prefs || [], 4, async (pref: { user_id: string; email_enabled: boolean; push_enabled: boolean }) => {
+    await pool(alertPrefs, 4, async (pref) => {
       const items = perUser.get(pref.user_id) || [];
       if (items.length === 0) return;
       const title = items.length === 1 ? "New episode today" : `${items.length} new episodes today`;
@@ -164,7 +187,8 @@ export async function GET(request: NextRequest) {
       }
 
       const apiKey = process.env.RESEND_API_KEY;
-      if (pref.email_enabled && apiKey) {
+      // Resend's shared test sender can't deliver to other people, so wait for a verified domain.
+      if (pref.email_enabled && apiKey && process.env.RESEND_FROM) {
         const { data: userData } = await admin.auth.admin.getUserById(pref.user_id);
         const to = userData?.user?.email;
         if (!to) return;
@@ -189,5 +213,15 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ shows: details.size, rows: rows.length, resurfaced, usersWithEpisodes: userIds.length, emails, pushes });
+  return NextResponse.json({
+    alertUsers: prefs.length,
+    rows: rows.length,
+    shows: uniqueShows.length,
+    showsChecked: details.size,
+    resurfaced,
+    usersWithEpisodes: userIds.length,
+    emails,
+    pushes,
+    ms: Date.now() - started,
+  });
 }
