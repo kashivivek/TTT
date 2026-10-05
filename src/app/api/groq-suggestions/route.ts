@@ -5,6 +5,7 @@ import { rateLimit } from "@/lib/rate-limit";
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const DEFAULT_GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
+const FALLBACK_MODELS = ["openai/gpt-oss-20b", "llama-3.3-70b-versatile", "openai/gpt-oss-120b"];
 const MAX_QUERY_LENGTH = 2000;
 
 interface TMDBItem {
@@ -76,23 +77,36 @@ JSON Response (array of title strings):
 `;
 
     // gpt-oss models "think" first and those tokens count toward the limit, so keep reasoning short.
-    const isReasoningModel = /gpt-oss|qwen3|deepseek-r1/i.test(groqModel);
-    const groqResponse = await fetch(groqApiUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${groqApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: groqModel,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.7,
-        max_completion_tokens: isReasoningModel ? 4000 : 1000,
-        ...(isReasoningModel && { reasoning_effort: "low" }),
-      }),
-    });
+    const callGroq = (model: string) => {
+      const isReasoningModel = /gpt-oss|qwen3|deepseek-r1/i.test(model);
+      return fetch(groqApiUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${groqApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.7,
+          max_completion_tokens: isReasoningModel ? 4000 : 1000,
+          ...(isReasoningModel && { reasoning_effort: "low" }),
+        }),
+      });
+    };
 
-    const groqJson = await groqResponse.json().catch(() => null);
+    // Groq retires models regularly; fall back so a stale GROQ_MODEL can't break suggestions.
+    const models = Array.from(new Set([groqModel, ...FALLBACK_MODELS]));
+    let groqResponse = await callGroq(models[0]);
+    let groqJson = await groqResponse.json().catch(() => null);
+    for (const model of models.slice(1)) {
+      const retired = groqResponse.status === 404 || groqJson?.error?.code === "model_decommissioned";
+      if (groqResponse.ok || !retired) break;
+      console.error("Groq model unavailable, falling back", groqJson?.error?.message);
+      groqResponse = await callGroq(model);
+      groqJson = await groqResponse.json().catch(() => null);
+    }
+
     if (!groqResponse.ok) {
       console.error("Groq request failed", groqResponse.status, groqModel, JSON.stringify(groqJson?.error ?? groqJson).slice(0, 300));
       return NextResponse.json(
