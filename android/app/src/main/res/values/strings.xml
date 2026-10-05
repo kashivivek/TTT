@@ -1,7 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">TV Time Tracker</string>
-    <string name="title_activity_main">TV Time Tracker</string>
+    <!-- Launcher label must stay short; the full store name is "TTT – TV Show &amp; Movie Tracker" -->
+    <string name="app_name">TTT</string>
+    <string name="title_activity_main">TTT – TV Show &amp; Movie Tracker</string>
     <string name="package_name">online.tvtime.app</string>
     <string name="custom_url_scheme">online.tvtime.app</string>
 </resources>

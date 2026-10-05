@@ -6,7 +6,7 @@ const serverUrl = process.env.CAP_SERVER_URL || "https://tvtime.online";
 
 const config: CapacitorConfig = {
   appId: "online.tvtime.app",
-  appName: "TV Time Tracker",
+  appName: "TTT",
   webDir: "mobile-shell",
   appendUserAgent: "TTTApp",
   backgroundColor: "#141414",
