@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { isNativeApp } from "@/lib/native";
 
 interface AdBannerProps {
   className?: string;
@@ -18,9 +19,14 @@ export default function AdBanner({
   const adClient = process.env.NEXT_PUBLIC_ADSENSE_PUB_ID || "ca-pub-9050370531125390";
   const isDev = process.env.NODE_ENV === "development";
   const adLoaded = useRef(false);
+  const [inApp, setInApp] = useState(false);
 
   useEffect(() => {
-    if (adSlot && !isDev && !adLoaded.current) {
+    setInApp(isNativeApp());
+  }, []);
+
+  useEffect(() => {
+    if (adSlot && !isDev && !inApp && !adLoaded.current) {
       try {
         // @ts-ignore
         (window.adsbygoogle = window.adsbygoogle || []).push({});
@@ -29,10 +35,10 @@ export default function AdBanner({
         console.error("AdSense error:", e);
       }
     }
-  }, [adSlot, isDev]);
+  }, [adSlot, isDev, inApp]);
 
-  // Never show a fake "Your Ad Here" box to real users.
-  if (!isDev && !adSlot) return null;
+  // Never show a fake "Your Ad Here" box to real users; AdSense isn't allowed in the app.
+  if (inApp || (!isDev && !adSlot)) return null;
 
   if (!isDev) {
     return (

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, FormEvent } from "react";
 import { Suspense } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import ShowCard from "@/components/ShowCard";
@@ -564,7 +565,7 @@ function DashboardContent() {
   return (
     <main className="min-h-screen pb-24">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-bg-primary/95 backdrop-blur-sm border-b border-card-surface px-4 py-4">
+      <header className="sticky top-0 z-40 bg-bg-primary border-b border-card-surface px-4 py-4">
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
@@ -576,14 +577,14 @@ function DashboardContent() {
             <div className="flex items-center gap-3">
               <WhatsNewWidget />
               <FeedbackWidget />
-              <a
+              <Link
                 href="/profile"
                 className="w-9 h-9 rounded-full bg-accent-yellow/20 flex items-center justify-center
                            text-sm font-bold text-accent-yellow hover:bg-accent-yellow/30 transition-colors"
                 title="Profile"
               >
                 {user?.email?.charAt(0).toUpperCase() || "?"}
-              </a>
+              </Link>
             </div>
           </div>
 

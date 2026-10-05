@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { escapeHtml, getAdminClient } from "@/lib/server-auth";
 import { tmdbServer } from "@/lib/tmdb-server";
 import { isEndedStatus, parseAirsTitle, refreshTrackState, todayISO, type Fetcher } from "@/lib/progress";
-import { sendPush, vapidConfigured } from "@/lib/webpush";
+import { sendPushToUser } from "@/lib/push-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -173,17 +173,8 @@ export async function GET(request: NextRequest) {
       const title = items.length === 1 ? "New episode today" : `${items.length} new episodes today`;
       const body = items.slice(0, 3).join("\n") + (items.length > 3 ? `\n+${items.length - 3} more` : "");
 
-      if (pref.push_enabled && vapidConfigured()) {
-        const { data: subs } = await admin.from("push_subscriptions").select("endpoint").eq("user_id", pref.user_id);
-        for (const sub of subs || []) {
-          await admin
-            .from("push_subscriptions")
-            .update({ last_payload: { title, body, url: "/calendar" } })
-            .eq("endpoint", sub.endpoint);
-          const result = await sendPush(sub.endpoint);
-          if (result === "gone") await admin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
-          if (result === "ok") pushes++;
-        }
+      if (pref.push_enabled) {
+        pushes += await sendPushToUser(admin, pref.user_id, { title, body, url: "/calendar" });
       }
 
       const apiKey = process.env.RESEND_API_KEY;

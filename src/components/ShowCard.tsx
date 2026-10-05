@@ -56,10 +56,11 @@ export default function ShowCard({
       {/* Backdrop image */}
       {backdropPath && (
         <img
-          src={backdropUrl(backdropPath)}
+          src={backdropUrl(backdropPath, "w780")}
           alt=""
           className="absolute inset-0 w-full h-full object-cover"
           loading="lazy"
+          decoding="async"
         />
       )}
 

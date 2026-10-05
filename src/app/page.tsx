@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import AdBanner from "@/components/AdBanner";
 import SiteFooter from "@/components/SiteFooter";
+import Link from "next/link";
 
 const FEATURES = [
   {
@@ -71,19 +72,19 @@ export default function HomePage() {
             </a>
           ) : (
             <>
-              <a
+              <Link
                 href="/login"
                 className="text-text-muted hover:text-text-primary transition-colors text-sm px-4 py-2"
               >
                 Log In
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/signup"
                 className="bg-accent-yellow text-bg-primary font-bold px-5 py-2 rounded-xl
                            hover:brightness-110 transition-all text-sm"
               >
                 Sign Up Free
-              </a>
+              </Link>
             </>
           )}
         </div>
@@ -113,20 +114,20 @@ export default function HomePage() {
             </a>
           ) : (
             <>
-              <a
+              <Link
                 href="/signup"
                 className="bg-accent-yellow text-bg-primary font-extrabold px-8 py-3.5 rounded-xl
                            hover:brightness-110 transition-all text-lg"
               >
                 Get Started Free
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/login"
                 className="border border-gray-600 text-text-primary font-bold px-8 py-3.5 rounded-xl
                            hover:border-accent-yellow transition-all text-lg"
               >
                 Log In
-              </a>
+              </Link>
             </>
           )}
         </div>

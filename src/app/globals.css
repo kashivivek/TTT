@@ -12,6 +12,25 @@ body {
     "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a,
+button,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+/* Inside the app: no rubber-band overscroll or long-press text selection on UI chrome */
+html.native-app body {
+  overscroll-behavior-y: none;
+}
+html.native-app nav,
+html.native-app button,
+html.native-app [role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* Custom scrollbar for dark theme */
@@ -60,5 +79,32 @@ body {
   scrollbar-width: none;
 }
 .scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Keyboard focus (website) */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 3px solid #ffd200;
+  outline-offset: 2px;
+}
+
+/* TV remote focus: must be obvious from across the room */
+html.tv-mode {
+  font-size: 112.5%;
+}
+html.tv-mode *:focus {
+  outline: 4px solid #ffd200;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 8px rgba(255, 210, 0, 0.25);
+}
+html.tv-mode a:focus,
+html.tv-mode [role="button"]:focus {
+  transform: scale(1.03);
+  transition: transform 0.15s ease-out;
+  z-index: 1;
+}
+html.tv-mode ::-webkit-scrollbar {
   display: none;
 }

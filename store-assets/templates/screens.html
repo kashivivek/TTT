@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>TTT store assets</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #0b0b0b; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; overflow: hidden; }
+  :root { --y: #FFD200; --bg: #141414; --card: #1F1F1F; --muted: #9CA3AF; }
+
+  /* ---------- canvas & captions ---------- */
+  .canvas { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center;
+    background: radial-gradient(120% 80% at 50% 0%, #3a2f05 0%, #141414 55%, #0b0b0b 100%); }
+  .caption { text-align: center; padding: 34px 26px 0; }
+  .caption .kicker { color: var(--y); font-weight: 800; font-size: 11px; letter-spacing: .22em; text-transform: uppercase; margin-bottom: 10px; }
+  .caption h1 { font-size: 27px; line-height: 1.12; font-weight: 850; letter-spacing: -.02em; }
+  .caption h1 em { font-style: normal; color: var(--y); }
+  .caption p { color: #c9cdd3; font-size: 13.5px; line-height: 1.4; margin-top: 10px; }
+
+  /* ---------- device frames ---------- */
+  .phone { margin-top: 26px; width: 290px; flex: 1; border-radius: 38px 38px 0 0; background: #050505; padding: 10px 10px 0;
+    box-shadow: 0 0 0 2px #2b2b2b, 0 30px 80px rgba(255,210,0,.18), 0 10px 40px rgba(0,0,0,.6); position: relative; }
+  .phone .screen { border-radius: 30px 30px 0 0; overflow: hidden; height: 100%; background: var(--bg); position: relative; }
+  .phone .notch { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: 70px; height: 18px; border-radius: 12px; background: #050505; z-index: 5; }
+  .tablet { margin-top: 30px; width: 88%; flex: 1; border-radius: 34px 34px 0 0; background: #050505; padding: 14px 14px 0;
+    box-shadow: 0 0 0 2px #2b2b2b, 0 30px 80px rgba(255,210,0,.16); }
+  .tablet .screen { border-radius: 22px 22px 0 0; overflow: hidden; height: 100%; background: var(--bg); position: relative; }
+  .tablet .screen > .ui { position: absolute; top: 0; left: 0; overflow: hidden; transform-origin: 0 0;
+    width: calc(100% / var(--tz)); height: calc(100% / var(--tz)); transform: scale(var(--tz)); }
+  .tablet .card { height: 104px; }
+
+  /* ---------- app UI ---------- */
+  .status { height: 34px; display: flex; justify-content: space-between; align-items: center; padding: 6px 22px 0; font-size: 11px; font-weight: 700; }
+  .hdr { padding: 6px 14px 12px; border-bottom: 1px solid #222; }
+  .hdr .row { display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 850; font-size: 16px; }
+  .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .hdr .icons { display: flex; gap: 7px; }
+  .dot { width: 26px; height: 26px; border-radius: 50%; background: var(--card); border: 1px solid #2a2a2a; display: grid; place-items: center; font-size: 12px; }
+  .dot.me { background: rgba(255,210,0,.18); color: var(--y); font-weight: 800; }
+  .search { margin-top: 10px; background: var(--card); border-radius: 12px; padding: 9px 12px; font-size: 11.5px; color: #7d828a; display: flex; gap: 8px; align-items: center; }
+  .body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .section { font-weight: 800; font-size: 14px; margin: 4px 0 2px; }
+  .sub { color: var(--muted); font-size: 10.5px; margin-top: -6px; }
+  .grid { display: grid; gap: 10px; grid-template-columns: 1fr; }
+  .tablet .grid { grid-template-columns: 1fr 1fr; }
+
+  .card { position: relative; height: 92px; border-radius: 14px; overflow: hidden; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+  .card .art { position: absolute; inset: 0; }
+  .card .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(20,20,20,.96) 10%, rgba(20,20,20,.35)); }
+  .card .info { position: relative; z-index: 1; max-width: 72%; }
+  .card .ep { color: var(--y); font-weight: 800; font-size: 11px; letter-spacing: .03em; }
+  .card .title { font-weight: 800; font-size: 15px; margin-top: 2px; }
+  .card .epname { color: var(--muted); font-size: 10px; margin-top: 3px; }
+  .check { position: relative; z-index: 1; width: 34px; height: 34px; border-radius: 50%; border: 2px solid #ffffff55; display: grid; place-items: center; color: transparent; font-weight: 900; }
+  .check.on { background: var(--y); border-color: var(--y); color: #141414; }
+  .card.focus { outline: 4px solid var(--y); outline-offset: 3px; box-shadow: 0 0 0 9px rgba(255,210,0,.25); transform: scale(1.03); }
+
+  .bnav { position: absolute; z-index: 10; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-around; padding: 9px 0 14px; background: var(--bg); border-top: 1px solid #222; font-size: 8.5px; color: #8a8f96; }
+  .bnav div { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .bnav .on { color: var(--y); }
+  .bnav i { font-style: normal; font-size: 15px; }
+
+  .toast { position: absolute; z-index: 11; left: 14px; right: 14px; bottom: 62px; background: #262626; border: 1px solid #333; border-radius: 999px; padding: 10px 16px; font-size: 11px; display: flex; justify-content: space-between; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  .toast b { color: var(--y); }
+
+  .notif { margin: 0 12px; background: rgba(38,38,38,.92); backdrop-filter: blur(10px); border: 1px solid #3a3a3a; border-radius: 18px; padding: 12px 14px; display: flex; gap: 10px; box-shadow: 0 18px 40px rgba(0,0,0,.55); }
+  .notif img { width: 30px; height: 30px; border-radius: 8px; }
+  .notif .t { font-size: 10px; color: #aeb3ba; display: flex; justify-content: space-between; }
+  .notif .h { font-weight: 800; font-size: 12.5px; margin-top: 2px; }
+  .notif .b { font-size: 11px; color: #d7dbe0; margin-top: 2px; line-height: 1.35; }
+
+  .day { font-weight: 800; font-size: 13px; margin-top: 4px; }
+  .day.today { color: var(--y); }
+  .row-ep { display: flex; gap: 10px; align-items: center; background: var(--card); border-radius: 12px; overflow: hidden; }
+  .row-ep .thumb { width: 74px; height: 46px; flex: none; }
+  .row-ep .t1 { font-weight: 800; font-size: 12px; }
+  .row-ep .t2 { color: var(--muted); font-size: 10px; margin-top: 2px; }
+
+  .panel { background: var(--card); border-radius: 16px; padding: 14px; }
+  .bar { height: 8px; background: #0f0f0f; border-radius: 99px; overflow: hidden; margin-top: 10px; }
+  .bar span { display: block; height: 100%; background: var(--y); border-radius: 99px; }
+  .drop { border: 2px dashed #3a3a3a; border-radius: 14px; padding: 18px; text-align: center; color: #b9bec5; font-size: 11px; }
+  .drop b { color: #fff; display: block; font-size: 13px; margin: 6px 0 3px; }
+  .ok { color: #66BB6A; font-weight: 800; font-size: 12px; }
+
+  .prov { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .prov div { background: #111; border: 1px solid #2a2a2a; border-radius: 10px; padding: 8px; display: flex; gap: 8px; align-items: center; font-size: 11px; font-weight: 700; }
+  .prov i { width: 22px; height: 22px; border-radius: 6px; display: block; }
+  .pill { display: inline-block; background: #111; border: 1px solid #333; border-radius: 99px; padding: 4px 10px; font-size: 10px; color: #cfd3d8; }
+  .tier { color: var(--muted); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; margin-top: 12px; }
+
+  .prompt { background: #0f0f0f; border: 1px solid var(--y); border-radius: 16px; padding: 12px; font-size: 12px; line-height: 1.4; }
+  .btn { background: var(--y); color: #141414; font-weight: 800; border-radius: 99px; padding: 9px 14px; font-size: 11.5px; text-align: center; }
+  .sugg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tablet .sugg { grid-template-columns: repeat(3, 1fr); }
+  .sugg .s { background: var(--card); border-radius: 14px; overflow: hidden; }
+  .sugg .s .a { height: 64px; }
+  .sugg .s .k { color: var(--y); font-size: 8.5px; font-weight: 800; letter-spacing: .18em; padding: 7px 9px 0; }
+  .sugg .s .n { font-weight: 800; font-size: 11.5px; padding: 2px 9px 9px; }
+
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #2a2a2a; border-radius: 14px; overflow: hidden; }
+  .stats > div { background: var(--bg); padding: 12px 8px; text-align: center; }
+  .stats .l { color: var(--muted); font-size: 9.5px; }
+  .stats .v { font-weight: 900; font-size: 19px; margin-top: 4px; }
+  .stats .u { color: var(--muted); font-size: 7.5px; letter-spacing: .1em; }
+  .badges { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .badge { background: var(--card); border-radius: 14px; padding: 10px 4px; text-align: center; font-size: 8.5px; font-weight: 700; }
+  .badge .e { width: 36px; height: 36px; margin: 0 auto 6px; border-radius: 50%; display: grid; place-items: center; font-size: 17px; }
+  .recap { background: linear-gradient(135deg, rgba(255,210,0,.25), rgba(255,120,0,.12)); border: 1px solid rgba(255,210,0,.3); border-radius: 16px; padding: 14px; display: flex; justify-content: space-between; align-items: center; }
+
+  .cmt { background: var(--card); border: 1px solid #2a2a2a; border-radius: 18px; padding: 12px; }
+  .cmt .who { font-weight: 800; font-size: 12px; }
+  .cmt .when { color: var(--muted); font-size: 9.5px; }
+  .cmt p { font-size: 11.5px; line-height: 1.45; margin-top: 8px; color: #e6e8eb; }
+  .cmt .rx { display: flex; gap: 6px; margin-top: 10px; }
+  .cmt .rx span { border: 1px solid #333; border-radius: 99px; padding: 3px 9px; font-size: 10px; color: #cfd3d8; }
+  .cmt .rx span.mine { border-color: var(--y); background: rgba(255,210,0,.1); }
+  .spoiler { margin-top: 8px; border: 1px dashed #3a3a3a; border-radius: 14px; padding: 12px; text-align: center; color: #b9bec5; font-size: 11px; background: #111; }
+
+  .tabs { display: flex; gap: 18px; border-bottom: 1px solid #262626; font-size: 10.5px; font-weight: 800; color: var(--muted); }
+  .tabs span { padding-bottom: 8px; }
+  .tabs .on { color: #fff; border-bottom: 2px solid var(--y); }
+  .hero { height: 150px; position: relative; }
+  .hero .art { position: absolute; inset: 0; }
+  .hero .fade { position: absolute; inset: 0; background: linear-gradient(0deg, #141414 5%, rgba(20,20,20,.2)); }
+  .hero .ttl { position: absolute; left: 14px; right: 14px; bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .hero h2 { font-size: 22px; font-weight: 900; }
+  .hero .m { color: var(--muted); font-size: 10px; margin-top: 3px; }
+  .track { background: #262626; border: 1px solid #3a3a3a; color: var(--y); border-radius: 99px; padding: 7px 12px; font-size: 11px; font-weight: 800; }
+
+  /* ---------- TV ---------- */
+  .tv { width: 100%; height: 100%; background: var(--bg); display: flex; flex-direction: column; }
+  .tv .top { display: flex; align-items: center; justify-content: space-between; padding: 22px 40px 12px; }
+  .tv .top .brand { font-size: 20px; }
+  .tv .top .brand img { width: 30px; height: 30px; }
+  .tv .nav { display: flex; gap: 10px; }
+  .tv .nav span { padding: 7px 14px; border-radius: 99px; font-size: 12px; font-weight: 800; color: #b9bec5; background: #1d1d1d; }
+  .tv .nav span.on { background: var(--y); color: #141414; }
+  .tv .content { padding: 8px 40px 24px; display: flex; flex-direction: column; gap: 12px; }
+  .tv .grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .tv .card { height: 108px; }
+  .tv .title { font-size: 17px; }
+  .tv .hint { position: absolute; bottom: 14px; right: 40px; font-size: 10px; color: #8a8f96; display: flex; gap: 14px; }
+  .tv .hint b { color: #fff; border: 1px solid #444; border-radius: 6px; padding: 1px 6px; margin-right: 4px; }
+
+  /* ---------- feature graphic / banner ---------- */
+  .fg { width: 1024px; height: 500px; position: relative; overflow: hidden; display: flex; align-items: center; padding: 0 70px;
+    background: radial-gradient(90% 120% at 85% 50%, #4a3a04 0%, #1a1a1a 55%, #0d0d0d 100%); }
+  .fg .copy { position: relative; z-index: 2; width: 520px; }
+  .fg .copy .b { display: flex; align-items: center; gap: 14px; font-weight: 900; font-size: 26px; }
+  .fg .copy .b img { width: 64px; height: 64px; border-radius: 14px; }
+  .fg h1 { font-size: 46px; line-height: 1.05; font-weight: 900; letter-spacing: -.02em; margin-top: 22px; }
+  .fg h1 em { color: var(--y); font-style: normal; }
+  .fg p { color: #cdd1d6; font-size: 18px; margin-top: 14px; }
+  .fg .stack { position: absolute; right: 40px; top: 50%; transform: translateY(-50%) rotate(-6deg); width: 380px; display: flex; flex-direction: column; gap: 12px; z-index: 1; }
+  .fg .stack .card { height: 96px; box-shadow: 0 20px 50px rgba(0,0,0,.6); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const LOGO = "../../public/logo.png";
+const P = new URLSearchParams(location.search);
+const kind = P.get("kind") || "phone";   // phone | tablet7 | tablet10 | tv | feature | tvbanner
+const shot = P.get("shot") || "1";
+
+const BASE = { phone: [360, 640], tablet7: [600, 960], tablet10: [800, 1280], tv: [960, 540], feature: [1024, 500], tvbanner: [640, 360] };
+const OUT  = { phone: [1080, 1920], tablet7: [1200, 1920], tablet10: [1600, 2560], tv: [1920, 1080], feature: [1024, 500], tvbanner: [1280, 720] };
+
+// Fictional titles and art only: real posters/logos can trigger Play IP rejections.
+const SHOWS = [
+  { t: "Neon District",    ep: "S03 | E01", n: "Afterglow",            g: "linear-gradient(120deg,#1b0b3a,#6d1bbd 45%,#ff3d9a)" },
+  { t: "Quiet Harbor",     ep: "S01 | E06", n: "The Lighthouse Keeper", g: "linear-gradient(120deg,#05222e,#0f6b7a 50%,#9be3d5)" },
+  { t: "Midnight Bakery",  ep: "S02 | E04", n: "Second Rise",           g: "linear-gradient(120deg,#2a1205,#a4501b 50%,#ffcb7d)" },
+  { t: "Signal Lost",      ep: "S04 | E09", n: "Static",                g: "linear-gradient(120deg,#07121f,#1d4e89 50%,#6fc3ff)" },
+  { t: "Starfall Academy", ep: "S01 | E02", n: "First Light",           g: "linear-gradient(120deg,#120720,#3a1d6e 50%,#ffd200)" },
+  { t: "The Last Orchard", ep: "S02 | E10", n: "Harvest",               g: "linear-gradient(120deg,#0d1a07,#3f7a1c 50%,#d6f28b)" },
+  { t: "Ridgeback",        ep: "S05 | E03", n: "High Ground",           g: "linear-gradient(120deg,#1a0c08,#7a2e1c 50%,#ff8b5c)" },
+  { t: "Paper Moons",      ep: "S01 | E08", n: "Origami",               g: "linear-gradient(120deg,#0a0a1f,#2d2d7a 50%,#c7c7ff)" },
+  { t: "Cold Open",        ep: "S03 | E05", n: "Thaw",                  g: "linear-gradient(120deg,#061a24,#1e5f7a 50%,#e8f7ff)" },
+];
+const art = (g) => `<div class="art" style="background:${g}"></div>`;
+
+const card = (s, o = {}) => `
+  <div class="card ${o.focus ? "focus" : ""}">${art(s.g)}<div class="shade"></div>
+    <div class="info"><div class="ep">${o.movie ? "MOVIE" : s.ep}</div><div class="title">${s.t}</div>${o.movie ? "" : `<div class="epname">${s.n}</div>`}</div>
+    <div class="check ${o.checked ? "on" : ""}">✓</div>
+  </div>`;
+
+const status = () => `<div class="status"><span>9:41</span><span>●●● ᯤ ▮</span></div>`;
+const header = () => `
+  <div class="hdr"><div class="row"><div class="brand"><img src="${LOGO}"/>TV Time Tracker</div>
+  <div class="icons"><div class="dot">✨</div><div class="dot">💬</div><div class="dot me">K</div></div></div>
+  <div class="search">🔍 Search TV shows and movies...</div></div>`;
+const bnav = (on) => `<div class="bnav">${[["📺","Shows"],["🎬","Movies"],["🗓️","Upcoming"],["✨","Explore"],["👤","Profile"]]
+  .map(([i, l]) => `<div class="${l === on ? "on" : ""}"><i>${i}</i>${l}</div>`).join("")}</div>`;
+
+const notif = (h, b) => `<div class="notif"><img src="${LOGO}"/><div style="flex:1"><div class="t"><span>TV Time Tracker</span><span>now</span></div>
+  <div class="h">${h}</div><div class="b">${b}</div></div></div>`;
+
+const SCREENS = {
+  dashboard: () => `${status()}${header()}<div class="body">
+      <div class="section">Shows</div>
+      <div class="grid">${card(SHOWS[0], { checked: true })}${card(SHOWS[1])}${card(SHOWS[2])}${card(SHOWS[3])}${card(SHOWS[4])}${card(SHOWS[5])}</div>
+      <div class="section" style="margin-top:8px">Not Watched Recently</div>
+      <div class="grid">${card(SHOWS[6])}${card(SHOWS[7])}${card(SHOWS[8])}</div>
+    </div><div class="toast"><span>Neon District S03E01 marked as watched</span><b>Undo</b></div>${bnav("Shows")}`,
+
+  alerts: () => `${status()}<div style="padding:18px 0 0">${notif("📺 New episode today", "Neon District S03E01 – Afterglow")}</div>
+    <div style="padding:10px 0 0">${notif("3 new episodes today", "Quiet Harbor S01E06 · Signal Lost S04E09 · Ridgeback S05E03")}</div>
+    <div class="body" style="margin-top:6px"><div class="section">Upcoming Episodes</div><div class="sub">New seasons come back to your list automatically</div>
+    <div class="grid">${card({ ...SHOWS[6], ep: "S06 | E01", n: "Airs Oct 18 · Return" })}${card({ ...SHOWS[7], ep: "UP TO DATE", n: "Waiting for the next episode date" })}</div></div>${bnav("Shows")}`,
+
+  calendar: () => `${status()}<div class="hdr"><div class="brand" style="font-size:20px">Upcoming</div><div class="sub" style="margin-top:4px">New episodes from shows you track</div></div>
+    <div class="body">${[["Today", 0, true], ["Tomorrow", 1], ["Saturday, Oct 10", 3], ["Monday, Oct 12", 5]].map(([d, i, today]) => `
+      <div class="day ${today ? "today" : ""}">${d}</div>
+      <div class="row-ep"><div class="thumb" style="background:${SHOWS[i].g}"></div><div><div class="t1">${SHOWS[i].t}</div><div class="t2">${SHOWS[i].ep.replace(" | ", "")} · ${SHOWS[i].n}</div></div></div>
+      ${i === 0 ? `<div class="row-ep"><div class="thumb" style="background:${SHOWS[8].g}"></div><div><div class="t1">${SHOWS[8].t}</div><div class="t2">S03E05 · Thaw</div></div></div>` : ""}`).join("")}
+    </div>${bnav("Upcoming")}`,
+
+  import: () => `${status()}${header()}<div class="body">
+      <div class="panel"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800;font-size:13px">📥 Import Watch History</div><span class="pill">🔥 Hot</span></div>
+        <div class="sub" style="margin-top:4px">Upload your TV Time data export</div>
+        <div class="drop" style="margin-top:12px">📦<b>tvtime-export.zip</b>Drop your file here or tap to browse</div>
+        <div style="margin-top:14px;text-align:center;color:var(--y);font-weight:800;font-size:12px">Resolving titles via TMDB…</div>
+        <div class="bar"><span style="width:78%"></span></div><div class="sub" style="text-align:center;margin-top:6px">412 / 528</div>
+      </div>
+      <div class="panel"><div class="ok">✓ 18,240 episodes imported</div><div class="sub" style="margin-top:6px">212 shows · 344 movies · ratings & badges</div></div>
+      <div class="grid">${card(SHOWS[3])}${card(SHOWS[5])}</div>
+    </div>${bnav("Profile")}`,
+
+  watch: () => `${status()}<div class="hero">${art(SHOWS[1].g)}<div class="fade"></div><div class="ttl"><div><h2>${SHOWS[1].t}</h2><div class="m">2 seasons • Returning Series</div></div><div class="track">✓ Tracking</div></div></div>
+    <div class="body"><div class="tabs"><span class="on">ABOUT</span><span>EPISODES</span><span>CAST</span><span>COMMUNITY</span></div>
+      <div class="panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800;font-size:14px">Where to Watch</div><span class="pill" style="white-space:nowrap">🇺🇸 US ▾</span></div>
+        <div class="tier">Streaming</div><div class="prov"><div><i style="background:#e50914"></i>Streamly</div><div><i style="background:#00a8e1"></i>Cinebox+</div></div>
+        <div class="tier">Rent</div><div class="prov"><div><i style="background:#6c4cff"></i>PlayHub</div><div><i style="background:#1db954"></i>VidStore</div></div>
+        <div class="tier">Buy</div><div class="prov"><div><i style="background:#ff9900"></i>MediaMart</div><div><i style="background:#999"></i>ReelShop</div></div>
+      </div></div>${bnav("Shows")}`,
+
+  ai: () => `${status()}${header()}<div class="body">
+      <div style="display:flex;justify-content:space-between;align-items:center"><div class="section" style="font-size:16px">TV Time Suggestions</div><span class="pill">✨ AI</span></div>
+      <div class="prompt">cozy mystery shows to binge this weekend</div>
+      <div style="display:flex;gap:8px"><div class="pill" style="padding:9px 12px">✨ Suggest me something</div><div class="btn" style="flex:1">Get Suggestions</div></div>
+      <div class="section">Suggestions for “cozy mystery”</div>
+      <div class="sugg">${[1, 2, 7, 8, 5, 3].map((i) => `<div class="s"><div class="a" style="background:${SHOWS[i].g}"></div><div class="k">TV</div><div class="n">${SHOWS[i].t}</div></div>`).join("")}</div>
+    </div>${bnav("Explore")}`,
+
+  profile: () => `${status()}<div style="height:86px;background:${SHOWS[0].g};position:relative"><div style="position:absolute;inset:0;background:linear-gradient(0deg,#141414,rgba(20,20,20,.1))"></div></div>
+    <div class="body" style="margin-top:-36px;position:relative">
+      <div style="display:flex;align-items:flex-end;gap:10px"><div class="dot me" style="width:56px;height:56px;font-size:22px;border:4px solid #141414">K</div><div style="font-weight:900;font-size:17px;padding-bottom:6px">Kashi</div></div>
+      <div class="stats"><div><div class="l">📺 TV time</div><div class="v">2<span class="u"> MO </span>14<span class="u"> D</span></div></div><div><div class="l">📋 Episodes</div><div class="v">3,482</div></div><div><div class="l">🎬 Movie time</div><div class="v">17<span class="u"> D</span></div></div><div><div class="l">🎥 Movies</div><div class="v">214</div></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="panel" style="display:flex;gap:10px;align-items:center"><span style="font-size:26px">🔥</span><div><div class="l" style="font-size:9px;color:var(--muted)">WATCH STREAK</div><div style="font-weight:900;font-size:17px">27 days</div></div></div>
+        <div class="recap" style="padding:10px"><div><div style="font-size:9px;color:#e8e2c6">YOUR 2026</div><div style="font-weight:900;font-size:13px">612 eps</div></div><div class="btn" style="padding:6px 10px;font-size:10px">Share</div></div>
+      </div>
+      <div class="section">Badges</div>
+      <div class="badges">${[["🏆","Screen Legend","#7c3aed,#6366f1"],["🔥","On a Roll","#f43f5e,#fb7185"],["🍿","Cinephile","#ffd200,#f97316"],["✅","Finisher","#10b981,#06b6d4"]]
+        .map(([e, n, c]) => `<div class="badge"><div class="e" style="background:linear-gradient(135deg,${c})">${e}</div>${n}</div>`).join("")}</div>
+    </div>${bnav("Profile")}`,
+
+  community: () => `${status()}<div class="hero" style="height:110px">${art(SHOWS[3].g)}<div class="fade"></div><div class="ttl"><div><h2>${SHOWS[3].t}</h2></div></div></div>
+    <div class="body"><div class="tabs"><span>ABOUT</span><span>EPISODES</span><span>CAST</span><span class="on">COMMUNITY</span></div>
+      <div class="cmt"><div class="who">BingeQueen</div><div class="when">2 hours ago</div><p>That cold open had me rewinding twice. Best season so far 👏</p><div class="rx"><span class="mine">👍 24</span><span>❤️ 9</span><span>😂 3</span><span>👎</span></div></div>
+      <div class="cmt"><div class="who">RemoteControl</div><div class="when">5 hours ago</div><div class="spoiler">⚠️ Spoiler — tap to reveal</div><div class="rx"><span>👍 41</span><span>❤️ 12</span><span>😂</span><span>👎</span></div></div>
+      <div class="cmt"><div class="who">Lena M.</div><div class="when">yesterday</div><p>Finally caught up — the soundtrack this season is unreal.</p><div class="rx"><span>👍 8</span><span>❤️ 5</span><span>😂</span><span>👎</span></div></div>
+    </div>${bnav("Shows")}`,
+};
+
+const CAPTIONS = {
+  dashboard: ["Track", "Your <em>next episode</em>,<br/>always ready", "One tap to mark watched. Undo if you slip."],
+  alerts: ["Never miss a drop", "Get alerted the day<br/><em>new episodes</em> air", "Push and email alerts for every show you track."],
+  calendar: ["Upcoming", "Everything airing<br/><em>this week</em>", "A calendar of new episodes across all your shows."],
+  import: ["Moving from TV Time?", "Bring your <em>whole history</em><br/>in minutes", "Import your TV Time export — episodes, movies, ratings & badges."],
+  watch: ["Where to watch", "Find any show on<br/><em>your services</em>", "Streaming, rent and buy options for your country."],
+  ai: ["Discover", "AI picks for<br/><em>your mood</em>", "Ask for a vibe or let us suggest from what you love."],
+  profile: ["Your stats", "Streaks, badges &<br/>your <em>year in TV</em>", "See your watch time and share your recap."],
+  community: ["Community", "Talk shows,<br/><em>spoiler-free</em>", "Reactions, display names and spoiler tags."],
+};
+const ORDER = ["dashboard", "alerts", "calendar", "import", "watch", "ai", "profile", "community"];
+
+function deviceShot(device) {
+  const key = ORDER[(parseInt(shot, 10) - 1) % ORDER.length];
+  const [k, h, p] = CAPTIONS[key];
+  return `<div class="canvas" style="width:100%;height:100%">
+    <div class="caption"><div class="kicker">${k}</div><h1>${h}</h1><p>${p}</p></div>
+    <div class="${device}">${device === "phone" ? '<div class="notch"></div>' : ""}<div class="screen">${device === "phone" ? SCREENS[key]() : `<div class="ui" style="--tz:${kind === "tablet10" ? 1.45 : 1.2}">${SCREENS[key]()}</div>`}</div></div></div>`;
+}
+
+const TV_TOP = (on) => `<div class="top"><div class="brand"><img src="${LOGO}"/>TV Time Tracker</div><div class="nav">${["Shows", "Movies", "Upcoming", "Explore", "Profile"].map((n) => `<span class="${n === on ? "on" : ""}">${n}</span>`).join("")}</div></div>`;
+const TV_HINT = `<div class="hint"><span><b>◀ ▶ ▲ ▼</b>Navigate</span><span><b>OK</b>Select</span><span><b>⟲</b>Back</span></div>`;
+const TV = {
+  1: () => `<div class="tv" style="position:relative">${TV_TOP("Shows")}<div class="content"><div class="section" style="font-size:16px">Continue watching</div>
+      <div class="grid">${card(SHOWS[0], { focus: true })}${card(SHOWS[1])}${card(SHOWS[2])}${card(SHOWS[3])}${card(SHOWS[4])}${card(SHOWS[5])}</div></div>${TV_HINT}</div>`,
+  2: () => `<div class="tv" style="position:relative">${TV_TOP("Upcoming")}<div class="content" style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+      ${[["Today", [0, 8]], ["Tomorrow", [1]], ["Saturday, Oct 10", [3]], ["Monday, Oct 12", [5, 6]]].map(([d, ids], j) => `<div style="display:flex;flex-direction:column;gap:8px">
+        <div class="day ${j === 0 ? "today" : ""}" style="font-size:15px">${d}</div>
+        ${ids.map((i, x) => `<div class="row-ep" style="${j === 0 && x === 0 ? "outline:4px solid var(--y);outline-offset:3px;box-shadow:0 0 0 9px rgba(255,210,0,.25)" : ""}"><div class="thumb" style="width:110px;height:60px;background:${SHOWS[i].g}"></div><div><div class="t1" style="font-size:14px">${SHOWS[i].t}</div><div class="t2" style="font-size:11px">${SHOWS[i].ep.replace(" | ", "")} · ${SHOWS[i].n}</div></div></div>`).join("")}</div>`).join("")}
+    </div>${TV_HINT}</div>`,
+  3: () => `<div class="tv" style="position:relative"><div class="hero" style="height:250px">${art(SHOWS[1].g)}<div class="fade"></div>
+      <div class="ttl" style="left:40px;right:40px;bottom:22px"><div><h2 style="font-size:34px">${SHOWS[1].t}</h2><div class="m" style="font-size:13px">2 seasons • Returning Series • Drama, Mystery</div></div><div class="track" style="font-size:14px;padding:10px 18px;outline:4px solid var(--y);outline-offset:3px">✓ Tracking</div></div></div>
+      <div class="content"><div class="tabs" style="font-size:13px"><span class="on">ABOUT</span><span>EPISODES</span><span>CAST</span><span>COMMUNITY</span></div>
+      <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:16px"><div class="panel" style="font-size:12.5px;line-height:1.5;color:#d7dbe0">A retired lighthouse keeper uncovers a decades-old secret when a storm washes something ashore in her quiet coastal town.</div>
+      <div class="panel"><div style="font-weight:800">Where to Watch</div><div class="prov"><div><i style="background:#e50914"></i>Streamly</div><div><i style="background:#00a8e1"></i>Cinebox+</div></div></div></div></div>${TV_HINT}</div>`,
+  4: () => `<div class="tv" style="position:relative">${TV_TOP("Explore")}<div class="content"><div class="section" style="font-size:16px">AI suggestions for “feel-good comedies”</div>
+      <div class="sugg" style="grid-template-columns:repeat(4,1fr);gap:14px">${[2, 7, 4, 5, 1, 6, 8, 0].map((i, x) => `<div class="s" style="${x === 1 ? "outline:4px solid var(--y);outline-offset:3px;transform:scale(1.04)" : ""}"><div class="a" style="height:90px;background:${SHOWS[i].g}"></div><div class="k">TV</div><div class="n" style="font-size:13px">${SHOWS[i].t}</div></div>`).join("")}</div></div>${TV_HINT}</div>`,
+};
+
+function feature() {
+  return `<div class="fg"><div class="copy"><div class="b"><img src="${LOGO}"/>TV Time Tracker</div>
+    <h1>Track every episode.<br/><em>Never miss</em> a new one.</h1><p>Alerts · Calendar · TV Time import · Where to watch</p></div>
+    <div class="stack">${card(SHOWS[0], { checked: true })}${card(SHOWS[1])}${card(SHOWS[3])}</div></div>`;
+}
+function tvbanner() {
+  return `<div style="width:640px;height:360px;display:flex;align-items:center;gap:26px;padding:0 48px;background:radial-gradient(90% 120% at 90% 50%,#4a3a04,#141414 60%)">
+    <img src="${LOGO}" style="width:150px;height:150px;border-radius:28px"/><div><div style="font-weight:900;font-size:44px;line-height:1">TV Time<br/>Tracker</div>
+    <div style="color:var(--y);font-weight:800;font-size:15px;margin-top:12px;letter-spacing:.08em">TRACK · DISCOVER · NEVER MISS</div></div></div>`;
+}
+
+const [bw, bh] = BASE[kind];
+const [ow, oh] = OUT[kind];
+const root = document.getElementById("root");
+// Scale so the captured element is ~OUT pixels regardless of the browser's devicePixelRatio;
+// render.sh then resizes to the exact Play Console size.
+const scale = ow / bw / (window.devicePixelRatio || 1);
+const wrap = document.createElement("div");
+wrap.id = "wrap";
+wrap.style.cssText = `width:${bw * scale}px;height:${bh * scale}px;overflow:hidden;position:relative`;
+root.replaceWith(wrap);
+wrap.appendChild(root);
+root.style.cssText = `width:${bw}px;height:${bh}px;transform:scale(${scale});transform-origin:0 0;position:absolute;top:0;left:0`;
+root.innerHTML =
+  kind === "feature" ? feature() :
+  kind === "tvbanner" ? tvbanner() :
+  kind === "tv" ? TV[shot]() :
+  deviceShot(kind === "phone" ? "phone" : "tablet");
+document.title = "ready";
+</script>
+</body>
+</html>

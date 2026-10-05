@@ -10,6 +10,8 @@ import {
   setEmailAlerts,
 } from "@/lib/push-client";
 import { track } from "@/lib/analytics";
+import { isNativeApp } from "@/lib/native";
+import { authFetch } from "@/lib/auth-fetch";
 
 export default function NotificationSettings({ userId }: { userId: string }) {
   const [email, setEmail] = useState(false);
@@ -18,10 +20,27 @@ export default function NotificationSettings({ userId }: { userId: string }) {
   const [note, setNote] = useState("");
   const [supported, setSupported] = useState(false);
   const [iosInstall, setIosInstall] = useState(false);
+  const [inApp, setInApp] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testNote, setTestNote] = useState("");
+
+  const sendTest = async () => {
+    setTesting(true);
+    setTestNote("");
+    try {
+      const res = await authFetch("/api/push/test", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      setTestNote(res.ok ? "Sent! It should arrive in a few seconds." : data.error || "Couldn't send a test notification.");
+    } catch {
+      setTestNote("Couldn't reach the server.");
+    }
+    setTesting(false);
+  };
 
   useEffect(() => {
     setSupported(pushSupported());
     setIosInstall(needsHomeScreenInstall());
+    setInApp(isNativeApp());
     loadNotificationPrefs(userId)
       .then((prefs) => {
         setEmail(!!prefs?.email_enabled);
@@ -71,10 +90,24 @@ export default function NotificationSettings({ userId }: { userId: string }) {
         <Toggle label="Push notifications" description="Alerts on this device" checked={push} disabled={busy} onChange={togglePush} />
       ) : (
         <p className="text-xs text-text-muted">
-          {iosInstall
+          {inApp
+            ? "Push notifications in the app are coming soon. Email alerts work today."
+            : iosInstall
             ? "On iPhone, tap Share → Add to Home Screen, then open TTT from your Home Screen to turn on push alerts."
             : "Push notifications aren't supported in this browser."}
         </p>
+      )}
+      {supported && push && (
+        <div className="flex items-center justify-between gap-4 pt-1">
+          <p className="text-xs text-text-muted">{testNote || "Check that alerts reach this device."}</p>
+          <button
+            onClick={sendTest}
+            disabled={testing}
+            className="shrink-0 rounded-full border border-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/5 disabled:opacity-60"
+          >
+            {testing ? "Sending…" : "Send test notification"}
+          </button>
+        </div>
       )}
       {note && <p className="text-xs text-red-400">{note}</p>}
     </section>

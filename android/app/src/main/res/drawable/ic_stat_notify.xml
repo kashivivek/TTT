@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon: the logo's "T" as a white silhouette (Android tints it). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="850"
+    android:viewportHeight="850">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M25,103 L83,45 L769,45 L827,103 L827,302 L567,302 L567,752 L516,805 L325,805 L274,752 L274,302 L25,302 Z" />
+</vector>

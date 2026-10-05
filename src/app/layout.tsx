@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import AuthProvider from "@/components/AuthProvider";
 import AdBanner from "@/components/AdBanner";
+import AdSenseScript from "@/components/AdSenseScript";
 import AnalyticsTracker from "@/components/AnalyticsTracker";
+import NativeBridge from "@/components/NativeBridge";
+import FocusNavigation from "@/components/FocusNavigation";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tvtime.online";
 const ADSENSE_CLIENT = process.env.NEXT_PUBLIC_ADSENSE_PUB_ID || "ca-pub-9050370531125390";
@@ -31,6 +33,7 @@ export const metadata: Metadata = {
     images: ["/icons/icon-512.png"],
   },
   twitter: { card: "summary", title: "TV Time Tracker", description: DESCRIPTION },
+  other: { "google-adsense-account": ADSENSE_CLIENT },
   icons: {
     icon: "/logo.png",
     shortcut: "/logo.png",
@@ -42,7 +45,6 @@ export const viewport: Viewport = {
   themeColor: "#141414",
   width: "device-width",
   initialScale: 1,
-  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -55,6 +57,8 @@ export default function RootLayout({
       <body className="bg-bg-primary text-text-primary min-h-screen">
         <AuthProvider>
           <AnalyticsTracker />
+          <NativeBridge />
+          <FocusNavigation />
           <div className="flex justify-center w-full min-h-screen">
             {/* Left Ad Banner */}
             <div className="hidden xl:block w-[160px] 2xl:w-[200px] flex-shrink-0 pt-24 sticky top-0 h-screen mx-4">
@@ -72,16 +76,11 @@ export default function RootLayout({
             </div>
           </div>
         </AuthProvider>
-        <Script
-          async
-          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-        />
+        <AdSenseScript client={ADSENSE_CLIENT} />
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              if ('serviceWorker' in navigator) {
+              if ('serviceWorker' in navigator && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
                 window.addEventListener('load', () => {
                   navigator.serviceWorker.register('/sw.js');
                 });

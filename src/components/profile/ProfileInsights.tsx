@@ -5,6 +5,7 @@ import { getSupabase } from "@/lib/supabase";
 import { getTvDetails } from "@/lib/tmdb";
 import { BADGES, computeStreaks } from "@/lib/badges";
 import { track } from "@/lib/analytics";
+import { isNativeApp } from "@/lib/native";
 
 interface Recap {
   year: number;
@@ -109,7 +110,10 @@ export default function ProfileInsights({ userId, displayName }: { userId: strin
     const text = `My ${recap.year} in TV: ${recap.episodes} episodes, ${recap.movies} movies, ${recap.hours} hours 📺`;
     track("share_recap");
     try {
-      if (navigator.share) {
+      if (isNativeApp()) {
+        const { Share } = await import("@capacitor/share");
+        await Share.share({ title: "My year in TV", text, url, dialogTitle: "Share your recap" });
+      } else if (navigator.share) {
         await navigator.share({ title: "My year in TV", text, url });
       } else {
         await navigator.clipboard.writeText(`${text} ${url}`);

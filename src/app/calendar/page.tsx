@@ -113,7 +113,7 @@ export default function CalendarPage() {
 
   return (
     <main className="min-h-screen pb-24">
-      <header className="sticky top-0 z-40 bg-bg-primary/95 backdrop-blur-sm border-b border-card-surface px-4 py-4">
+      <header className="sticky top-0 z-40 bg-bg-primary border-b border-card-surface px-4 py-4">
         <div className="max-w-5xl mx-auto">
           <h1 className="text-2xl font-extrabold">Upcoming</h1>
           <p className="text-sm text-text-muted">New episodes from shows you track</p>

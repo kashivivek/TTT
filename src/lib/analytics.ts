@@ -1,4 +1,6 @@
 import { track as vercelTrack } from "@vercel/analytics";
+import { appPlatform } from "./native";
+import { isTvMode } from "./tv";
 
 const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
@@ -38,6 +40,8 @@ function sendPosthog(event: string, distinct_id: string, properties: Props) {
         $current_url: window.location.href,
         $pathname: window.location.pathname,
         $screen_width: window.innerWidth,
+        platform: appPlatform(),
+        tv: isTvMode(),
         standalone: window.matchMedia?.("(display-mode: standalone)").matches ?? false,
       },
     }),
