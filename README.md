@@ -242,7 +242,7 @@ Notification icon: `android/app/src/main/res/drawable/ic_stat_notify.xml` (white
 ### Android push setup (Firebase)
 
 1. Firebase console → project → **Add app → Android** → package `online.tvtime.app`.
-2. Put `google-services.json` in `android/app/`.
+2. Put `google-services.json` in `android/app/` (git-ignored; re-download from Firebase → Project settings if lost).
 3. Project settings → Service accounts → **Generate new private key** → Vercel `FIREBASE_SERVICE_ACCOUNT` (Sensitive).
 4. Vercel `NEXT_PUBLIC_NATIVE_PUSH_PLATFORMS=android` → redeploy.
 
