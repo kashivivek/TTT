@@ -75,6 +75,8 @@ JSON Response (array of title strings):
 ["Title 1", "Title 2", "Title 3", "Title 4", "Title 5", "Title 6", "Title 7", "Title 8", "Title 9", "Title 10", "Title 11", "Title 12"]
 `;
 
+    // gpt-oss models "think" first and those tokens count toward the limit, so keep reasoning short.
+    const isReasoningModel = /gpt-oss|qwen3|deepseek-r1/i.test(groqModel);
     const groqResponse = await fetch(groqApiUrl, {
       method: "POST",
       headers: {
@@ -85,23 +87,28 @@ JSON Response (array of title strings):
         model: groqModel,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
-        max_tokens: 1000,
+        max_completion_tokens: isReasoningModel ? 4000 : 1000,
+        ...(isReasoningModel && { reasoning_effort: "low" }),
       }),
     });
 
     const groqJson = await groqResponse.json().catch(() => null);
-    let responseText = "";
-
-    if (groqJson) {
-      if (Array.isArray(groqJson.choices) && groqJson.choices[0]?.message?.content) {
-        responseText = groqJson.choices[0].message.content;
-      }
+    if (!groqResponse.ok) {
+      console.error("Groq request failed", groqResponse.status, groqModel, JSON.stringify(groqJson?.error ?? groqJson).slice(0, 300));
+      return NextResponse.json(
+        { error: groqResponse.status === 429 ? "AI is busy, try again shortly" : "AI provider error" },
+        { status: groqResponse.status === 429 ? 429 : 502 }
+      );
     }
+
+    const choice = groqJson?.choices?.[0];
+    const responseText: string = choice?.message?.content || "";
 
     // Extract titles from LLM response
     const titles = extractJsonArray(responseText);
     if (!titles || titles.length === 0) {
-      return NextResponse.json({ suggestions: [] });
+      console.error("Groq returned no titles", groqModel, choice?.finish_reason, JSON.stringify(responseText).slice(0, 200));
+      return NextResponse.json({ error: "AI returned no suggestions" }, { status: 502 });
     }
 
     // Step 2: Search TMDB for each title and get the #1 most popular result
