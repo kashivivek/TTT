@@ -5,6 +5,18 @@ import { rateLimit } from "@/lib/rate-limit";
 
 const FEEDBACK_TYPES = new Set(["Bug", "Feedback", "Request"]);
 const MAX_MESSAGE = 4000;
+const MIN_ANON_MESSAGE = 15;
+const MIN_FILL_MS = 3000;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Anonymous form spam: honeypot filled, submitted too fast, or the "message" is just an email/link. */
+function looksLikeSpam(body: Record<string, unknown>, message: string): string | null {
+  if (typeof body.website === "string" && body.website.trim()) return "honeypot";
+  if (typeof body.elapsedMs !== "number" || body.elapsedMs < MIN_FILL_MS) return "too-fast";
+  const words = message.replace(/\S+@\S+\.\S+/g, "").replace(/https?:\/\/\S+/g, "").trim();
+  if (words.length < MIN_ANON_MESSAGE) return "no-message";
+  return null;
+}
 
 export async function POST(req: Request) {
   try {
@@ -22,7 +34,27 @@ export async function POST(req: Request) {
     // Identity comes from the session, never from the request body.
     const user = await getUserFromRequest(req);
     const userId = user?.id ?? null;
-    const userEmail = user?.email ?? null;
+    const contactEmail =
+      typeof body?.email === "string" && EMAIL_RE.test(body.email.trim()) ? body.email.trim().slice(0, 254) : null;
+    const userEmail = user?.email ?? contactEmail;
+
+    if (!user) {
+      const spamReason = looksLikeSpam(body ?? {}, message);
+      if (spamReason) {
+        console.warn("Feedback rejected", spamReason, clientIp(req), req.headers.get("user-agent")?.slice(0, 120));
+        // Real people get a hint; bots learn nothing useful.
+        return NextResponse.json(
+          { error: spamReason === "no-message" ? "Please describe how we can help." : "Couldn't send. Please try again." },
+          { status: 400 }
+        );
+      }
+    }
+
+    const source = [
+      req.headers.get("x-vercel-ip-country") || "?",
+      (req.headers.get("referer") || "").replace(/^https?:\/\/[^/]+/, "") || "?",
+      (req.headers.get("user-agent") || "?").slice(0, 120),
+    ].join(" · ");
 
     try {
       const supabase = createClient(
@@ -53,12 +85,13 @@ export async function POST(req: Request) {
         html: `
           <h2>New Feedback Received</h2>
           <p><strong>Type:</strong> ${escapeHtml(type)}</p>
-          <p><strong>User Email:</strong> ${escapeHtml(userEmail || "Not provided")}</p>
-          <p><strong>User ID:</strong> ${escapeHtml(userId || "Not provided")}</p>
+          <p><strong>User Email:</strong> ${escapeHtml(userEmail || "Not provided")}${user ? "" : contactEmail ? " (entered on contact form)" : ""}</p>
+          <p><strong>User ID:</strong> ${escapeHtml(userId || "Not logged in")}</p>
           <p><strong>Message:</strong></p>
           <blockquote style="border-left: 4px solid #eee; padding-left: 10px; color: #555;">
             ${escapeHtml(message).replace(/\n/g, "<br/>")}
           </blockquote>
+          <p style="color:#888;font-size:12px">Source: ${escapeHtml(source)}</p>
         `,
       }),
     });
