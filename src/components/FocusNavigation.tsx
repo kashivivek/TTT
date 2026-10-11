@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { detectTvMode, moveFocus, type Direction } from "@/lib/tv";
 
+const TV_VIEWPORT_WIDTH = 1280;
+
 const ARROWS: Record<string, Direction> = {
   ArrowUp: "up",
   ArrowDown: "down",
@@ -21,7 +23,11 @@ export default function FocusNavigation() {
 
   useEffect(() => {
     const tv = detectTvMode();
-    if (tv) document.documentElement.classList.add("tv-mode");
+    if (tv) {
+      document.documentElement.classList.add("tv-mode");
+      // Honoured only by the TV app (MainActivity enables wide viewports on TV); phones keep device-width.
+      document.querySelector('meta[name="viewport"]')?.setAttribute("content", `width=${TV_VIEWPORT_WIDTH}`);
+    }
 
     const enhance = () => {
       document

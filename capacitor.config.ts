@@ -1,19 +1,17 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
-// The native apps load the live site, so every web deploy updates them instantly.
-// For local testing, CAP_SERVER_URL=http://<your-mac-ip>:3000 points the app at `npm run dev:lan`.
-const serverUrl = process.env.CAP_SERVER_URL || "https://tvtime.online";
+// The app ships the static bundle in out/ (npm run build:app) and live-updates it from tvtime.online.
+// For local testing, CAP_SERVER_URL=http://<your-mac-ip>:3000 loads `npm run dev:lan` instead.
+const serverUrl = process.env.CAP_SERVER_URL;
 
 const config: CapacitorConfig = {
   appId: "online.tvtime.app",
   appName: "TTT",
-  webDir: "mobile-shell",
+  webDir: "out",
   appendUserAgent: "TTTApp",
   backgroundColor: "#141414",
   server: {
-    url: serverUrl,
-    cleartext: serverUrl.startsWith("http://"),
-    errorPath: "offline.html",
+    ...(serverUrl ? { url: serverUrl, cleartext: serverUrl.startsWith("http://") } : {}),
     androidScheme: "https",
   },
   ios: {
@@ -36,6 +34,10 @@ const config: CapacitorConfig = {
     },
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],
+    },
+    // Self-hosted updates are driven by src/lib/live-update.ts
+    CapacitorUpdater: {
+      autoUpdate: false,
     },
   },
 };

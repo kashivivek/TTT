@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { getMovieDetails, getTvDetails } from "@/lib/tmdb";
 import { useRouter } from "next/navigation";
+import { mediaPath } from "@/lib/app-routes";
 
 interface FavoriteShow {
   tmdb_id: number;
@@ -70,7 +71,7 @@ export default function FavoritesTab({ userId }: { userId: string }) {
       {favorites.map((show) => (
         <div
           key={`${show.media_type}_${show.tmdb_id}`}
-          onClick={() => router.push(show.media_type === "movie" ? `/movies/${show.tmdb_id}` : `/shows/${show.tmdb_id}`)}
+          onClick={() => router.push(mediaPath(show.media_type, show.tmdb_id))}
           className="aspect-[2/3] rounded-lg overflow-hidden bg-card-surface relative group cursor-pointer hover:ring-2 hover:ring-accent-yellow transition-all shadow-md"
         >
           {show.poster_path ? (

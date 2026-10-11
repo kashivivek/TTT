@@ -1,5 +1,42 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Streaming apps "Where to Watch" can open (Android 11+ package visibility). Keep in sync with src/lib/streaming-links.ts -->
+    <queries>
+        <package android:name="com.netflix.mediaclient" />
+        <package android:name="com.netflix.ninja" />
+        <package android:name="com.amazon.avod.thirdpartyclient" />
+        <package android:name="com.amazon.amazonvideo.livingroom" />
+        <package android:name="com.disney.disneyplus" />
+        <package android:name="in.startv.hotstar" />
+        <package android:name="com.hulu.plus" />
+        <package android:name="com.hulu.livingroomplus" />
+        <package android:name="com.wbd.stream" />
+        <package android:name="com.hbo.hbonow" />
+        <package android:name="com.apple.atve.androidtv.appletv" />
+        <package android:name="com.cbs.app" />
+        <package android:name="com.cbs.ott" />
+        <package android:name="com.peacocktv.peacockandroid" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.google.android.youtube.tv" />
+        <package android:name="com.google.android.youtube.tvunplugged" />
+        <package android:name="com.google.android.videos" />
+        <package android:name="com.crunchyroll.crunchyroid" />
+        <package android:name="com.tubitv" />
+        <package android:name="tv.pluto.android" />
+        <package android:name="com.jio.media.ondemand" />
+        <package android:name="com.jio.media.stb.ondemand" />
+        <package android:name="com.sonyliv" />
+        <package android:name="com.graymatrix.did" />
+        <package android:name="com.bydeluxe.d3.android.program.starz" />
+        <package android:name="com.mubi" />
+        <package android:name="com.plexapp.android" />
+        <package android:name="com.fubo.mobile" />
+        <package android:name="com.fubo.firetv.screen" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
     <application
         android:allowBackup="true"
         android:banner="@drawable/tv_banner"

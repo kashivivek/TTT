@@ -4,6 +4,7 @@ node_modules/
 # next.js
 .next/
 out/
+public/app-bundle/
 
 # environment
 .env

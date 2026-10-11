@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { mediaPath } from "@/lib/app-routes";
 import { useAuth } from "@/components/AuthProvider";
 import ImportDropzone from "@/components/ImportDropzone";
 import { parseImportZip } from "@/lib/import-parser";
@@ -494,7 +495,7 @@ export default function ProfilePage() {
                 {shows.map((show) => (
                   <div
                     key={`${show.media_type}_${show.tmdb_id}`}
-                    onClick={() => router.push(show.media_type === "movie" ? `/movies/${show.tmdb_id}` : `/shows/${show.tmdb_id}`)}
+                    onClick={() => router.push(mediaPath(show.media_type, show.tmdb_id))}
                     className="flex-shrink-0 w-24 h-36 rounded-lg overflow-hidden bg-card-surface relative group cursor-pointer hover:ring-2 hover:ring-accent-yellow transition-all"
                   >
                     {show.backdrop_path ? (

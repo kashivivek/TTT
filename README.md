@@ -58,7 +58,8 @@ src/app/                 routes (pages + API)
   api/push/pending       service worker fetches web-push message text
   api/og/recap           OG image for shared recaps
   .well-known/           assetlinks.json (Android) + apple-app-site-association (iOS)
-  shows/[id], movies/[id]  server page.tsx (SEO) + *DetailsClient.tsx (interactive)
+  shows/[id], movies/[id]  page.web.tsx (website-only SEO page) + *DetailsClient.tsx (interactive, shared)
+  show/, movie/          page.app.tsx: app-only versions (/show?id=…), see "Mobile apps"
 src/lib/
   progress.ts            next-episode logic (shared by web, importer and cron)
   tracking.ts            saves the "next episode" pointer for a show
@@ -72,9 +73,9 @@ src/lib/
 src/components/          UI (NativeBridge, FocusNavigation, AdSenseScript, …)
 supabase/migrations/     SQL to run in the Supabase SQL editor (in order)
 android/ ios/            Capacitor native projects (committed)
-mobile-shell/            tiny local web folder bundled in the apps (offline page)
+mobile-shell/            old remote-mode app folder (unused since 1.2)
 assets/                  source logo for app icons/splash (@capacitor/assets)
-scripts/                 android-keystore.sh
+scripts/                 build-app-bundle.mjs, android-dev/tv/keystore helpers
 ```
 
 ## Local development
@@ -204,26 +205,44 @@ select
 
 ## Mobile apps (Capacitor)
 
-The apps are **native shells that load https://tvtime.online** (`capacitor.config.ts → server.url`).
-Every web deploy updates the apps instantly — store updates are only needed for native changes (plugins, icons, manifest, permissions).
+Since 1.2 the apps **ship the UI inside the app** (static export of the same Next.js code) and get data from tvtime.online. One codebase, two builds:
+
+| | Website (`npm run build:web`) | App bundle (`npm run build:app` → `out/`) |
+|---|---|---|
+| Config | `next.config.mjs` default | `NEXT_PUBLIC_APP_BUNDLE=1` → `output: "export"` |
+| Pages | `*.tsx`, `*.web.tsx`, all `.ts` routes/APIs, middleware | `*.tsx`, `*.app.tsx` (no server code) |
+| Show/movie URLs | `/shows/123`, `/movies/123` (server-rendered, SEO) | `/show?id=123`, `/movie?id=123` |
+| API calls | relative `/api/…` | `https://tvtime.online/api/…` (CORS in `src/middleware.ts` allows only the app origins) |
+
+Rules when adding code:
+- Link to titles with `mediaPath(type, id)` and call APIs through `authFetch` / `tmdbFetch` (`src/lib/app-routes.ts` handles both builds).
+- A page that needs the server (`searchParams` on the server, `generateMetadata` with fetches, ISR) → name it `page.web.tsx` and, if the app needs it, add a client `page.app.tsx`.
+- Don't use `window.location.origin` for links that leave the app (emails, shares) → use `SITE_URL`.
+- The app's local server answers every page URL with `index.html`; the inline script in `layout.tsx` + `HomePage` route to the right page.
+
+**Live updates** (`src/lib/live-update.ts`, `@capgo/capacitor-updater`, self-hosted, no Capgo account):
+- `npm run build` (what Vercel runs) first builds the app bundle and publishes `public/app-bundle/<commit>.zip` + `latest.json` (sha256 checksum, `minNativeBuild`).
+- The app checks `latest.json` on start/resume, downloads newer bundles in the background, and switches when the app goes to the background. A bundle that fails to start (no `notifyAppReady`) is rolled back automatically.
+- So **web pushes still update the apps without a store release**. When a change needs new native code (plugin, permission, manifest), bump `versionCode` **and** `MIN_NATIVE_BUILD` in `scripts/build-app-bundle.mjs` so older installs don't receive bundles they can't run.
+- Check a deploy: `https://tvtime.online/app-bundle/latest.json`.
 
 | | |
 |---|---|
 | App ID | `online.tvtime.app` |
 | Capacitor | 8 (Android target/compile SDK 36, min SDK 24; iOS via Swift Package Manager) |
-| Plugins | app, push-notifications, splash-screen, status-bar, share |
+| Plugins | app, app-launcher, push-notifications, splash-screen, status-bar, share, @capgo/capacitor-updater |
 | User agent suffix | `TTTApp` |
-| Offline page | `mobile-shell/offline.html` (`server.errorPath`) |
+| App origin | `https://localhost` (Android), `capacitor://localhost` (iOS) |
 
-Native behaviour (`src/components/NativeBridge.tsx`): Android back button, deep links (`appUrlOpen`), status bar, splash hide, push registration + tap-to-open. Ads are hidden in the app (`AdBanner`, `AdSenseScript`). The service worker is not registered in the app.
+Native behaviour (`src/components/NativeBridge.tsx`): Android back button, deep links (`appUrlOpen`, mapped with `appPath()`; emailed sign-in links set the session from the URL hash), live updates, status bar, splash hide, push registration + tap-to-open. Ads, Vercel Analytics and the service worker are not included in the app.
 
 Scripts (run **off the corporate VPN** — Gradle/Maven downloads are blocked there):
 
 | Command | What it does |
 |---|---|
-| `npm run cap:sync` | copy config/plugins into `android/` and `ios/` (run after adding/updating plugins) |
-| `npm run android:run` | build + install on a connected phone/TV/emulator |
-| `npm run android:dev` | same, but the app loads `npm run dev:lan` on your Mac (test unpushed web changes in the app; phone + Mac on the same Wi-Fi) |
+| `npm run cap:sync` | build the app bundle + copy it, config and plugins into `android/` and `ios/` |
+| `npm run android:run` | build the app bundle + install on a connected phone/TV/emulator |
+| `npm run android:dev` | the app loads `npm run dev:lan` on your Mac instead of the bundle (live reload; phone + Mac on the same Wi-Fi) |
 | `npm run android:apk` | debug APK → `android/app/build/outputs/apk/debug/app-debug.apk` |
 | `npm run android:keystore` | create the Play upload key (`android/upload-keystore.jks` + `android/keystore.properties`, git-ignored — **back them up**) |
 | `npm run android:bundle` | signed release bundle → `android/app/build/outputs/bundle/release/app-release.aab` |
@@ -255,29 +274,40 @@ Notification icon: `android/app/src/main/res/drawable/ic_stat_notify.xml` (white
 
 - `npm run ios` opens Xcode; runs in the Simulator without an account.
 - Needs: Apple Developer account ($99/yr), signing team in Xcode, APNs key uploaded to Firebase, iOS push wiring (APNs token → FCM), Associated Domains, `APPLE_TEAM_ID`.
-- Risk: App Review guideline 4.2 (web-wrapper apps). Native push/share/deep links help.
+- Risk: App Review guideline 4.2 (web-wrapper apps) — lower now that the UI ships inside the app.
 
 ## Android TV
 
 The same APK runs on Android TV:
 
 - Manifest: `LEANBACK_LAUNCHER` category, `android.software.leanback` and `touchscreen` **not required**, `android:banner="@drawable/tv_banner"` (placeholder: `res/drawable-xhdpi/tv_banner.png`, 640×360 — replace with a designed banner incl. app name).
-- TV mode (`src/lib/tv.ts`, `src/components/FocusNavigation.tsx`): detected when the Android app has no touch points. Adds `html.tv-mode` → bigger text, strong yellow focus ring, D-pad spatial navigation (left/right stay on the same row), auto-focus on page change.
+- TV mode (`src/lib/tv.ts`, `src/components/FocusNavigation.tsx`): detected when the Android app has no touch points. Adds `html.tv-mode` → strong yellow focus ring, D-pad spatial navigation (left/right stay on the same row), auto-focus on page change.
 - Clickable `.cursor-pointer` cards get `tabindex`/`role="button"` and open with Enter/OK (also improves keyboard access on the website).
+- Screen size: TVs report a 960 px viewport (tablet layout, looks zoomed). On TV, `MainActivity` enables wide viewports and `FocusNavigation` sets `<meta name="viewport" content="width=1280">` → desktop layout. Change `TV_VIEWPORT_WIDTH` to adjust (bigger = smaller content).
 - Test in a desktop browser: `https://tvtime.online/?tv=1` (arrow keys), `?tv=0` to turn off.
 - Install on a TV: Settings → Device Preferences → About → Build ×7 → enable debugging → `adb connect <tv-ip>` → `npm run android:run`.
 - Play Console: Release → Advanced settings → **Form factors → Android TV** (separate TV review; needs TV screenshots + banner).
+- **TV emulator on this Mac:** `npm run android:tv` (off VPN). The first run downloads the Android TV image and creates the `TTT_Android_TV` AVD, then installs and starts the app. Arrow keys = D-pad, Enter = OK, Esc = Back. Streaming apps (Netflix etc.) aren't available on emulators, so only the "not installed" message can be tested there.
+
+### Where to Watch links (`src/lib/streaming-links.ts`)
+
+TMDB/JustWatch only provide a TMDB page link, so each provider button opens the service itself:
+- **Website / phone app:** the service's search URL for the title (e.g. `netflix.com/search?q=`). On Android, the installed app opens it when it handles the link, otherwise the browser does.
+- **Android TV app:** launches the installed app by package name via `@capacitor/app-launcher` (lands on the app home; Netflix etc. don't accept title search from other apps). If it isn't installed, a hint appears.
+- Unknown providers fall back to the TMDB watch page.
+- Adding a service: add it to `SERVICES` **and** its package names to `<queries>` in `AndroidManifest.xml` (native change → new bundle).
+- Keep the "Streaming availability by JustWatch" credit (TMDB terms).
 
 ## Release checklists
 
 **Web (Vercel)**
-1. `npx tsc --noEmit && npx next build`
+1. `npx tsc --noEmit && npm run build` (builds the app bundle and the website)
 2. Run any new SQL in `supabase/migrations/` **before** deploying code that needs it.
 3. Commit as `kashivivek <kashivivek@gmail.com>` and push → Vercel deploys `main`.
 4. Smoke test: login, mark watched + Undo, show page logged-out, `/calendar`, PostHog live events.
 
 **Android (Play Console)**
-1. Bump `versionCode` / `versionName` in `android/app/build.gradle` (only for native changes).
+1. Bump `versionCode` / `versionName` in `android/app/build.gradle` (only for native changes; also raise `MIN_NATIVE_BUILD` if the web code depends on them).
 2. Off VPN: `npm run android:bundle`.
 3. Upload the `.aab` → Internal testing → promote.
 4. First release only: copy App signing SHA-256 → `ANDROID_SHA256_CERT_FINGERPRINTS`; privacy policy URL `https://tvtime.online/privacy`.
@@ -306,6 +336,7 @@ To change text/layouts: edit `store-assets/templates/screens.html`, then run `sh
 - **Git identity:** commit with the personal account (`kashivivek@gmail.com`), never a work email.
 - **New tables:** always enable RLS + add policies in a migration, or the anon key exposes them.
 - **Capacitor:** `android/app/src/main/assets` and `ios/App/App/public` are generated by `cap sync` (git-ignored) — run `npm run cap:sync` before native builds.
+- **Stale types:** after renaming pages, `tsc` may complain about `.next/types/...` → `rm -rf .next` and rebuild.
 
 ## License
 

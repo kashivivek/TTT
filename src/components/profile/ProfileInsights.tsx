@@ -6,6 +6,7 @@ import { getTvDetails } from "@/lib/tmdb";
 import { BADGES, computeStreaks } from "@/lib/badges";
 import { track } from "@/lib/analytics";
 import { isNativeApp } from "@/lib/native";
+import { SITE_URL } from "@/lib/site";
 
 interface Recap {
   year: number;
@@ -106,7 +107,7 @@ export default function ProfileInsights({ userId, displayName }: { userId: strin
       streak: String(streak?.longest || 0),
       top: recap.topShows.join("|").slice(0, 120),
     });
-    const url = `${window.location.origin}/share/recap?${params.toString()}`;
+    const url = `${SITE_URL}/share/recap?${params.toString()}`;
     const text = `My ${recap.year} in TV: ${recap.episodes} episodes, ${recap.movies} movies, ${recap.hours} hours 📺`;
     track("share_recap");
     try {

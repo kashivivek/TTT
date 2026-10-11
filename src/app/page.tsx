@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import { IS_APP_BUNDLE, appPath } from "@/lib/app-routes";
 import AdBanner from "@/components/AdBanner";
 import SiteFooter from "@/components/SiteFooter";
 import Link from "next/link";
@@ -43,9 +44,18 @@ const FEATURES = [
 export default function HomePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const restored = useRef(false);
 
   // Auto-redirect logged-in users to dashboard
   useEffect(() => {
+    if (restored.current) return;
+    const pending = IS_APP_BUNDLE ? sessionStorage.getItem("ttt-path") : null;
+    if (pending) {
+      restored.current = true;
+      sessionStorage.removeItem("ttt-path");
+      router.replace(appPath(pending));
+      return;
+    }
     if (!loading && user) {
       router.replace("/dashboard");
     }

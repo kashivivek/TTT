@@ -91,9 +91,6 @@ button:focus-visible,
 }
 
 /* TV remote focus: must be obvious from across the room */
-html.tv-mode {
-  font-size: 112.5%;
-}
 html.tv-mode *:focus {
   outline: 4px solid #ffd200;
   outline-offset: 3px;

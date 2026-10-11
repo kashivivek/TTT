@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import CheckCircle from "./CheckCircle";
 import { useRouter } from "next/navigation";
+import { mediaPath } from "@/lib/app-routes";
 import { backdropUrl } from "@/lib/tmdb";
 
 interface ShowCardProps {
@@ -47,7 +48,7 @@ export default function ShowCard({
 
   return (
     <div
-      onClick={() => router.push(mediaType === "movie" ? `/movies/${tmdbId}` : `/shows/${tmdbId}`)}
+      onClick={() => router.push(mediaPath(mediaType, tmdbId))}
       className={`
         relative w-full h-36 sm:h-44 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-accent-yellow/50 transition-all
         ${exiting ? "card-exit" : ""}

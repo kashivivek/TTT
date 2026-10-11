@@ -8,6 +8,7 @@ import AdSenseScript from "@/components/AdSenseScript";
 import AnalyticsTracker from "@/components/AnalyticsTracker";
 import NativeBridge from "@/components/NativeBridge";
 import FocusNavigation from "@/components/FocusNavigation";
+import { IS_APP_BUNDLE } from "@/lib/app-routes";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tvtime.online";
 const ADSENSE_CLIENT = process.env.NEXT_PUBLIC_ADSENSE_PUB_ID || "ca-pub-9050370531125390";
@@ -55,6 +56,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-bg-primary text-text-primary min-h-screen">
+        {IS_APP_BUNDLE && (
+          // The app's local server answers every page URL with index.html; remember the path and let HomePage route to it.
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `if (location.pathname !== '/' && !/\\.[a-z0-9]+$/i.test(location.pathname)) { sessionStorage.setItem('ttt-path', location.pathname + location.search); history.replaceState(null, '', '/'); }`,
+            }}
+          />
+        )}
         <AuthProvider>
           <AnalyticsTracker />
           <NativeBridge />
@@ -76,20 +85,24 @@ export default function RootLayout({
             </div>
           </div>
         </AuthProvider>
-        <AdSenseScript client={ADSENSE_CLIENT} />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-                window.addEventListener('load', () => {
-                  navigator.serviceWorker.register('/sw.js');
-                });
-              }
-            `,
-          }}
-        />
-        <Analytics />
-        <SpeedInsights />
+        {!IS_APP_BUNDLE && (
+          <>
+            <AdSenseScript client={ADSENSE_CLIENT} />
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `
+                  if ('serviceWorker' in navigator && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
+                    window.addEventListener('load', () => {
+                      navigator.serviceWorker.register('/sw.js');
+                    });
+                  }
+                `,
+              }}
+            />
+            <Analytics />
+            <SpeedInsights />
+          </>
+        )}
       </body>
     </html>
   );

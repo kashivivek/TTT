@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { getMovieDetails, getTvDetails } from "@/lib/tmdb";
 import { useRouter } from "next/navigation";
+import { mediaPath } from "@/lib/app-routes";
 
 interface ReviewItem {
   id: string;
@@ -88,7 +89,7 @@ export default function ReviewsTab({ userId }: { userId: string }) {
       {reviews.map((review) => (
         <div
           key={`${review.media_type}_${review.tmdb_id}`}
-          onClick={() => router.push(review.media_type === "movie" ? `/movies/${review.tmdb_id}` : `/shows/${review.tmdb_id}`)}
+          onClick={() => router.push(mediaPath(review.media_type, review.tmdb_id))}
           className="flex gap-4 p-4 rounded-xl bg-card-surface border border-white/5 cursor-pointer hover:bg-card-surface/80 transition-colors shadow-sm backdrop-blur-md"
         >
           {review.poster_path ? (

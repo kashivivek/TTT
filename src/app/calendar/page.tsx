@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { mediaPath } from "@/lib/app-routes";
 import { useAuth } from "@/components/AuthProvider";
 import BottomNav from "@/components/BottomNav";
 import NotificationPrompt from "@/components/NotificationPrompt";
@@ -180,7 +181,7 @@ function EpisodeRow({ entry, subtitle }: { entry: CalendarEntry; subtitle?: stri
   const { episode } = entry;
   return (
     <Link
-      href={`/shows/${entry.tmdbId}`}
+      href={mediaPath("tv", entry.tmdbId)}
       className="flex items-center gap-4 bg-card-surface rounded-xl overflow-hidden hover:ring-2 hover:ring-accent-yellow/50 transition-all"
     >
       <div className="w-28 h-16 flex-shrink-0 bg-black/30">

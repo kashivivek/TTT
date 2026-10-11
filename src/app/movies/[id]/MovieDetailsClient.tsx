@@ -17,6 +17,8 @@ import ReviewEditor from "@/components/ReviewEditor";
 import CommunityTab from "@/components/CommunityTab";
 import FavoriteButton from "@/components/FavoriteButton";
 import SiteFooter from "@/components/SiteFooter";
+import ProviderButton from "@/components/ProviderButton";
+import { mediaPath } from "@/lib/app-routes";
 
 type Tab = "about" | "cast" | "community";
 
@@ -40,7 +42,7 @@ export default function MovieDetailsClient({ tmdbId, initialDetails }: { tmdbId:
   const requireUser = () => {
     if (user) return true;
     track("signup_prompt", { source: "movie_page" });
-    router.push(`/signup?next=${encodeURIComponent(`/movies/${tmdbId}`)}`);
+    router.push(`/signup?next=${encodeURIComponent(mediaPath("movie", tmdbId))}`);
     return false;
   };
 
@@ -339,24 +341,19 @@ export default function MovieDetailsClient({ tmdbId, initialDetails }: { tmdbId:
                             <p className="text-xs uppercase tracking-[0.2em] text-text-muted mb-3">{tier === "flatrate" ? "Streaming" : tier === "rent" ? "Rent" : "Buy"}</p>
                             <div className="grid gap-2">
                               {items.map((provider: any) => (
-                                <a
+                                <ProviderButton
                                   key={provider.provider_id}
-                                  href={providers.results[selectedCountry]?.link || "#"}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-xl transition hover:bg-white/10"
-                                >
-                                  {provider.logo_path ? (
-                                    <img src={logoUrl(provider.logo_path)} alt={provider.provider_name} className="w-6 h-6 object-contain" />
-                                  ) : null}
-                                  <span className="text-xs">{provider.provider_name}</span>
-                                </a>
+                                  provider={provider}
+                                  title={details.title}
+                                  fallbackUrl={providers.results[selectedCountry]?.link}
+                                />
                               ))}
                             </div>
                           </div>
                         );
                       })}
                     </div>
+                    <p className="text-[11px] text-text-muted">Streaming availability by JustWatch.</p>
                   </div>
                 ) : (
                   <p className="text-text-muted">Selected country has no provider data.</p>

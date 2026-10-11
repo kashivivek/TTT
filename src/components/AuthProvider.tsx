@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { User } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
+import { SITE_URL } from "@/lib/site";
+import { webPath } from "@/lib/app-routes";
 
 interface AuthContextType {
   user: User | null;
@@ -63,7 +65,7 @@ export default function AuthProvider({
     const { data, error } = await getSupabase().auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}${next}` },
+      options: { emailRedirectTo: `${SITE_URL}${webPath(next)}` },
     });
     return { error: error?.message, needsConfirmation: !error && !data.session };
   };
@@ -74,7 +76,7 @@ export default function AuthProvider({
 
   const resetPassword = async (email: string) => {
     const { error } = await getSupabase().auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/update-password`,
+      redirectTo: `${SITE_URL}/update-password`,
     });
     return { error: error?.message };
   };

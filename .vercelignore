@@ -3,3 +3,5 @@ ios
 assets
 mobile-shell
 store-assets
+out
+public/app-bundle

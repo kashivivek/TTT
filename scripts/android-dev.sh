@@ -11,9 +11,10 @@ if [ -z "$IP" ]; then
 fi
 
 echo "App will load http://$IP:3000 (make sure 'npm run dev:lan' is running)"
+[ -f out/index.html ] || npm run build:app
 CAP_SERVER_URL="http://$IP:3000" npx cap sync android
 CAP_SERVER_URL="http://$IP:3000" npx cap run android
 
-# Point the installed project back at production so release builds aren't affected.
-npx cap sync android >/dev/null
-echo "Done. Re-run 'npm run android:run' later to install the production-pointing app again."
+# Point the installed project back at the packaged app so release builds aren't affected.
+npx cap sync android >/dev/null 2>&1 || true
+echo "Done. Re-run 'npm run android:run' later to install the normal packaged app again."

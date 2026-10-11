@@ -1,3 +1,5 @@
+import { apiUrl } from "./app-routes";
+
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";
 
 export function backdropUrl(path: string | null, size = "w1280"): string {
@@ -65,7 +67,7 @@ export function sortWatchProviderRegions(results: Record<string, TMDbRegionWatch
 
 /** All TMDb calls go through our API proxy to keep the key server-side */
 export async function tmdbFetch<T>(endpoint: string): Promise<T> {
-  const res = await fetch(`/api/tmdb?endpoint=${encodeURIComponent(endpoint)}`);
+  const res = await fetch(apiUrl(`/api/tmdb?endpoint=${encodeURIComponent(endpoint)}`));
   if (!res.ok) {
     throw new Error(`TMDb API error: ${res.status}`);
   }

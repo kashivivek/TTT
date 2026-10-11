@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, FormEvent } from "react";
 import { Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import { mediaPath } from "@/lib/app-routes";
 import { useAuth } from "@/components/AuthProvider";
 import ShowCard from "@/components/ShowCard";
 import EmotionMatrix from "@/components/EmotionMatrix";
@@ -589,10 +590,7 @@ function DashboardContent() {
           </div>
 
           <div className="absolute -bottom-6 w-full max-w-lg px-4 left-1/2 -translate-x-1/2">
-          <SearchAutocomplete onSelect={(id, type) => {
-            if (type === "movie") router.push(`/movies/${id}`);
-            else router.push(`/shows/${id}`);
-          }} />
+          <SearchAutocomplete onSelect={(id, type) => router.push(mediaPath(type, id))} />
         </div>
         </div>
       </header>
@@ -681,7 +679,7 @@ function DashboardContent() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {(aiSuggestions.length > 0 ? aiSuggestions : trendingAll).map((item: any) => {
                     const title = item.title || item.name || "Untitled";
-                    const route = item.media_type === "movie" ? `/movies/${item.id}` : `/shows/${item.id}`;
+                    const route = mediaPath(item.media_type, item.id);
 
                     return (
                       <div
@@ -823,7 +821,7 @@ function DashboardContent() {
                       ) : (
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
                           {upcomingMovies.map((movie) => (
-                            <div key={movie.id} onClick={() => router.push(`/movies/${movie.id}`)} className="cursor-pointer hover:ring-2 hover:ring-accent-yellow rounded-xl overflow-hidden bg-card-surface">
+                            <div key={movie.id} onClick={() => router.push(mediaPath("movie", movie.id))} className="cursor-pointer hover:ring-2 hover:ring-accent-yellow rounded-xl overflow-hidden bg-card-surface">
                               {movie.backdrop_path && (
                                 <img src={`https://image.tmdb.org/t/p/w500${movie.backdrop_path}`} alt={movie.title} className="w-full h-24 object-cover opacity-80 hover:opacity-100" />
                               )}
@@ -847,7 +845,7 @@ function DashboardContent() {
                             .map(movie => (
                             <div
                               key={movie.tmdb_id}
-                              onClick={() => router.push(`/movies/${movie.tmdb_id}`)}
+                              onClick={() => router.push(mediaPath("movie", movie.tmdb_id))}
                               className="relative w-full h-36 sm:h-44 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-accent-yellow/50 transition-all"
                             >
                               {movie.backdrop_path && (
@@ -911,7 +909,7 @@ function DashboardContent() {
                             return (
                             <div
                               key={show.tmdb_id}
-                              onClick={() => router.push(`/shows/${show.tmdb_id}`)}
+                              onClick={() => router.push(mediaPath("tv", show.tmdb_id))}
                               className="relative w-full h-36 sm:h-44 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-accent-yellow/50 transition-all"
                             >
                               {show.backdrop_path && (
@@ -951,7 +949,7 @@ function DashboardContent() {
                             .map(show => (
                             <div
                               key={show.tmdb_id}
-                              onClick={() => router.push(`/shows/${show.tmdb_id}`)}
+                              onClick={() => router.push(mediaPath("tv", show.tmdb_id))}
                               className="relative w-full h-36 sm:h-44 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-accent-yellow/50 transition-all"
                             >
                               {show.backdrop_path && (
