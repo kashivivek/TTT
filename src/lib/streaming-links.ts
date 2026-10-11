@@ -1,11 +1,16 @@
+import { registerPlugin } from "@capacitor/core";
 import { appPlatform, isNativeApp } from "./native";
 import { isTvMode } from "./tv";
 
+// Native: android/app/src/main/java/online/tvtime/app/StreamingAppsPlugin.java (app 1.3+)
+const StreamingApps = registerPlugin<{
+  open(options: { url?: string; packages: string[] }): Promise<{ result: "title" | "app" | "none" }>;
+}>("StreamingApps");
+
 /**
- * TMDB/JustWatch only gives a TMDB "watch" page link, not per-service deep links.
- * So we open the service's own search for the title: on phones Android hands these
- * URLs to the installed app when it supports them; on Android TV (no browser) we launch
- * the installed app by package name.
+ * Each service button opens the exact title page (from /api/watch-links) or the service's search.
+ * Android only routes web links to apps that claim them (Netflix does; Hulu, Disney+, Prime mostly don't),
+ * so in the Android app we send the link straight into the installed service app by package name.
  */
 interface ServiceInfo {
   /** Key used by /api/watch-links for exact title pages. */
@@ -77,22 +82,33 @@ export async function openProvider(provider: ProviderLike, title: string, fallba
   }
 
   const service = findService(provider.provider_name);
+  const tv = appPlatform() === "android" && isTvMode();
+  const notInstalled: OpenResult = {
+    ok: false,
+    message: service
+      ? `${provider.provider_name} isn't installed on this TV. Install it from the Play Store, then search for "${title}".`
+      : `Open ${provider.provider_name} on your TV and search for "${title}".`,
+  };
+
+  if (appPlatform() === "android" && service) {
+    const packages = tv ? [...service.tv, ...service.phone] : [...service.phone, ...service.tv];
+    try {
+      const { result } = await StreamingApps.open({ url, packages });
+      if (result !== "none") return { ok: true };
+      if (tv) return notInstalled;
+      // Phone without the app: open the website below
+    } catch {
+      // Older app build without the plugin: fall back below
+    }
+  }
+
   const { AppLauncher } = await import("@capacitor/app-launcher");
 
-  if (appPlatform() === "android" && isTvMode()) {
+  if (tv) {
     for (const pkg of service ? [...service.tv, ...service.phone] : []) {
       try {
         const { value } = await AppLauncher.canOpenUrl({ url: pkg });
         if (value) {
-          // The app's own title link opens the title page if the TV app supports it
-          if (direct) {
-            try {
-              await AppLauncher.openUrl({ url: direct });
-              return { ok: true };
-            } catch {
-              // Fall through to just launching the app
-            }
-          }
           await AppLauncher.openUrl({ url: pkg });
           return { ok: true };
         }
@@ -100,12 +116,7 @@ export async function openProvider(provider: ProviderLike, title: string, fallba
         // Try the next package
       }
     }
-    return {
-      ok: false,
-      message: service
-        ? `${provider.provider_name} isn't installed on this TV. Install it from the Play Store, then search for "${title}".`
-        : `Open ${provider.provider_name} on your TV and search for "${title}".`,
-    };
+    return notInstalled;
   }
 
   // Phones/tablets: Android/iOS route the link into the installed app when it supports it.
