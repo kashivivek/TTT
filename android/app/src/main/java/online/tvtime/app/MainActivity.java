@@ -14,6 +14,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(WatchNextPlugin.class);
         super.onCreate(savedInstanceState);
 
         // TVs report a 960px-wide viewport, which renders the tablet layout zoomed in; let the page ask for a wider one.

@@ -88,6 +88,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Google TV home screen "Watch Next" cards (WatchNextPlugin) -->
+    <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" />
 
     <!-- Same APK runs on phones and Android TV: neither touch nor a TV is required -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />

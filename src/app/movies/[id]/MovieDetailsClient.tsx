@@ -17,8 +17,10 @@ import ReviewEditor from "@/components/ReviewEditor";
 import CommunityTab from "@/components/CommunityTab";
 import FavoriteButton from "@/components/FavoriteButton";
 import SiteFooter from "@/components/SiteFooter";
-import ProviderButton from "@/components/ProviderButton";
+import ProviderButton, { useWatchLinks } from "@/components/ProviderButton";
+import WatchedPrompt from "@/components/WatchedPrompt";
 import { mediaPath } from "@/lib/app-routes";
+import { scheduleWatchReminder, takeWatchedParam } from "@/lib/watch-reminder";
 
 type Tab = "about" | "cast" | "community";
 
@@ -28,12 +30,18 @@ export default function MovieDetailsClient({ tmdbId, initialDetails }: { tmdbId:
 
   const [details] = useState<any>(initialDetails);
   const [providers, setProviders] = useState<any | null>(null);
+  const watchLinks = useWatchLinks("movie", tmdbId);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [preferredCountry, setPreferredCountry] = useState<string | null>(null);
   const [isSavingCountry, setIsSavingCountry] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("about");
   const [isTracked, setIsTracked] = useState(false);
   const [isWatched, setIsWatched] = useState(false);
+  const [showWatchedPrompt, setShowWatchedPrompt] = useState(false);
+
+  useEffect(() => {
+    if (takeWatchedParam()) setShowWatchedPrompt(true);
+  }, []);
 
   useEffect(() => {
     getMovieWatchProviders(tmdbId).then(setProviders).catch(() => setProviders(null));
@@ -217,6 +225,16 @@ export default function MovieDetailsClient({ tmdbId, initialDetails }: { tmdbId:
 
   return (
     <main className="min-h-screen pb-24">
+      {showWatchedPrompt && !isWatched && (
+        <WatchedPrompt
+          label={details.title}
+          onConfirm={() => {
+            setShowWatchedPrompt(false);
+            toggleWatched();
+          }}
+          onDismiss={() => setShowWatchedPrompt(false)}
+        />
+      )}
       {/* Hero Header */}
       <div className="relative h-64 sm:h-80 w-full">
         {details.backdrop_path ? (
@@ -346,6 +364,11 @@ export default function MovieDetailsClient({ tmdbId, initialDetails }: { tmdbId:
                                   provider={provider}
                                   title={details.title}
                                   fallbackUrl={providers.results[selectedCountry]?.link}
+                                  links={watchLinks}
+                                  onOpened={() =>
+                                    !isWatched &&
+                                    scheduleWatchReminder({ type: "movie", id: tmdbId, title: details.title, runtime: details.runtime })
+                                  }
                                 />
                               ))}
                             </div>

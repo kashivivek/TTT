@@ -20,8 +20,10 @@ import ReviewEditor from "@/components/ReviewEditor";
 import CommunityTab from "@/components/CommunityTab";
 import FavoriteButton from "@/components/FavoriteButton";
 import SiteFooter from "@/components/SiteFooter";
-import ProviderButton from "@/components/ProviderButton";
+import ProviderButton, { useWatchLinks } from "@/components/ProviderButton";
+import WatchedPrompt from "@/components/WatchedPrompt";
 import { mediaPath } from "@/lib/app-routes";
+import { scheduleWatchReminder, takeWatchedParam } from "@/lib/watch-reminder";
 
 type Tab = "about" | "episodes" | "cast" | "community";
 
@@ -39,12 +41,24 @@ export default function ShowDetailsClient({ tmdbId, initialDetails }: { tmdbId: 
 
   const [details] = useState<any>(initialDetails);
   const [providers, setProviders] = useState<any | null>(null);
+  const watchLinks = useWatchLinks("tv", tmdbId);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [preferredCountry, setPreferredCountry] = useState<string | null>(null);
   const [isSavingCountry, setIsSavingCountry] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("about");
   const [isTracked, setIsTracked] = useState(false);
   const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(new Set());
+  // Next aired episode to watch (tracked_shows pointer), used by the "Finished it?" reminder
+  const [nextUp, setNextUp] = useState<{ season: number; episode: number } | null>(null);
+  // Set when arriving from a reminder: an episode, or "show" when we didn't know which one
+  const [watchedPrompt, setWatchedPrompt] = useState<{ season: number; episode: number } | "show" | null>(null);
+
+  useEffect(() => {
+    const value = takeWatchedParam();
+    const m = value?.match(/^(\d+)-(\d+)$/);
+    if (m) setWatchedPrompt({ season: Number(m[1]), episode: Number(m[2]) });
+    else if (value) setWatchedPrompt("show");
+  }, []);
   
   // For episodes tab
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
@@ -110,12 +124,15 @@ export default function ShowDetailsClient({ tmdbId, initialDetails }: { tmdbId: 
       // Check if tracked
       const { data: trackData } = await db
         .from("tracked_shows")
-        .select("id")
+        .select("id, media_type, current_season, current_episode")
         .eq("user_id", user.id)
         .eq("tmdb_id", tmdbId)
         .maybeSingle();
         
       if (trackData) setIsTracked(true);
+      if (trackData?.media_type === "tv" && trackData.current_season && trackData.current_episode) {
+        setNextUp({ season: trackData.current_season, episode: trackData.current_episode });
+      }
 
       // Load watch history for this show
       const { data: history } = await db
@@ -320,6 +337,37 @@ export default function ShowDetailsClient({ tmdbId, initialDetails }: { tmdbId: 
     }
   };
 
+  const confirmWatchedPrompt = async () => {
+    const target = watchedPrompt;
+    setWatchedPrompt(null);
+    if (!target || !requireUser()) return;
+    if (target === "show") {
+      setActiveTab("episodes");
+      return;
+    }
+    const key = `${target.season}-${target.episode}`;
+    if (watchedEpisodes.has(key)) return;
+    try {
+      await getSupabase().from("watch_history").upsert(
+        {
+          user_id: user!.id,
+          tmdb_id: tmdbId,
+          media_type: "tv",
+          season_number: target.season,
+          episode_number: target.episode,
+          watched_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,tmdb_id,season_number,episode_number" }
+      );
+      const next = new Set(watchedEpisodes).add(key);
+      setWatchedEpisodes(next);
+      track("mark_watched", { media_type: "tv", source: "reminder" });
+      await savePointer(next);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   if (!details) {
     return (
       <main className="min-h-screen flex items-center justify-center">
@@ -330,6 +378,13 @@ export default function ShowDetailsClient({ tmdbId, initialDetails }: { tmdbId: 
 
   return (
     <main className="min-h-screen pb-24">
+      {watchedPrompt && (
+        <WatchedPrompt
+          label={watchedPrompt === "show" ? details.name : `${details.name} S${watchedPrompt.season}E${watchedPrompt.episode}`}
+          onConfirm={confirmWatchedPrompt}
+          onDismiss={() => setWatchedPrompt(null)}
+        />
+      )}
       {/* Hero Header */}
       <div className="relative h-64 sm:h-80 w-full">
         {details.backdrop_path ? (
@@ -459,6 +514,10 @@ export default function ShowDetailsClient({ tmdbId, initialDetails }: { tmdbId: 
                                   provider={provider}
                                   title={details.name}
                                   fallbackUrl={providers.results[selectedCountry]?.link}
+                                  links={watchLinks}
+                                  onOpened={() =>
+                                    scheduleWatchReminder({ type: "tv", id: tmdbId, title: details.name, season: nextUp?.season, episode: nextUp?.episode })
+                                  }
                                 />
                               ))}
                             </div>

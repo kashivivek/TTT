@@ -14,7 +14,7 @@ AVD="TTT_Android_TV"
 
 if ! "$BIN/avdmanager" list avd -c | grep -qx "$AVD"; then
   echo "Installing Android TV system image ($IMAGE)..."
-  yes | "$BIN/sdkmanager" --install "$IMAGE" "platform-tools" "emulator" >/dev/null
+  { yes || true; } | "$BIN/sdkmanager" --install "$IMAGE" "platform-tools" "emulator" >/dev/null
   echo "no" | "$BIN/avdmanager" create avd -n "$AVD" -k "$IMAGE" -d tv_1080p
 fi
 

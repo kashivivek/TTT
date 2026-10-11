@@ -20,8 +20,15 @@ export function mediaPath(type: string, id: number | string): string {
 /** Maps a website path (deep link, notification, ?next=) to the route that exists in this build. */
 export function appPath(path: string): string {
   if (!IS_APP_BUNDLE) return path;
-  const m = path.match(/^\/(shows|movies)\/(\d+)/);
-  return m ? mediaPath(m[1] === "movies" ? "movie" : "tv", m[2]) : path;
+  const m = path.match(/^\/(shows|movies)\/(\d+)\/?(?:\?(.*))?$/);
+  if (!m) return path;
+  const target = mediaPath(m[1] === "movies" ? "movie" : "tv", m[2]);
+  return m[3] ? `${target}&${m[3]}` : target;
+}
+
+/** Adds query params to a path that may already have some (app routes use ?id=). */
+export function withQuery(path: string, params: Record<string, string>): string {
+  return `${path}${path.includes("?") ? "&" : "?"}${new URLSearchParams(params)}`;
 }
 
 /** Inverse of appPath: the website URL path for an in-app route (used in emailed links). */

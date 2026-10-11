@@ -8,6 +8,8 @@ import { isTvMode } from "./tv";
  * the installed app by package name.
  */
 interface ServiceInfo {
+  /** Key used by /api/watch-links for exact title pages. */
+  key?: string;
   match: RegExp;
   search: (q: string) => string;
   /** Android package names; TV builds often differ from phone builds. */
@@ -18,13 +20,13 @@ interface ServiceInfo {
 const enc = encodeURIComponent;
 
 const SERVICES: ServiceInfo[] = [
-  { match: /^netflix/i, search: (q) => `https://www.netflix.com/search?q=${enc(q)}`, phone: ["com.netflix.mediaclient"], tv: ["com.netflix.ninja"] },
-  { match: /prime video|amazon video|amazon prime/i, search: (q) => `https://www.primevideo.com/search?phrase=${enc(q)}`, phone: ["com.amazon.avod.thirdpartyclient"], tv: ["com.amazon.amazonvideo.livingroom"] },
-  { match: /disney/i, search: (q) => `https://www.disneyplus.com/search?q=${enc(q)}`, phone: ["com.disney.disneyplus", "in.startv.hotstar"], tv: ["com.disney.disneyplus", "in.startv.hotstar"] },
+  { key: "netflix", match: /^netflix/i, search: (q) => `https://www.netflix.com/search?q=${enc(q)}`, phone: ["com.netflix.mediaclient"], tv: ["com.netflix.ninja"] },
+  { key: "prime", match: /prime video|amazon video|amazon prime/i, search: (q) => `https://www.primevideo.com/search?phrase=${enc(q)}`, phone: ["com.amazon.avod.thirdpartyclient"], tv: ["com.amazon.amazonvideo.livingroom"] },
+  { key: "disney", match: /disney/i, search: (q) => `https://www.disneyplus.com/search?q=${enc(q)}`, phone: ["com.disney.disneyplus", "in.startv.hotstar"], tv: ["com.disney.disneyplus", "in.startv.hotstar"] },
   { match: /hotstar/i, search: (q) => `https://www.hotstar.com/in/explore?search_query=${enc(q)}`, phone: ["in.startv.hotstar"], tv: ["in.startv.hotstar"] },
-  { match: /^hulu/i, search: (q) => `https://www.hulu.com/search?q=${enc(q)}`, phone: ["com.hulu.plus"], tv: ["com.hulu.livingroomplus"] },
-  { match: /^(hbo )?max\b|hbo max/i, search: (q) => `https://play.max.com/search?q=${enc(q)}`, phone: ["com.wbd.stream", "com.hbo.hbonow"], tv: ["com.wbd.stream", "com.hbo.hbonow"] },
-  { match: /apple tv/i, search: (q) => `https://tv.apple.com/search?term=${enc(q)}`, phone: ["com.apple.atve.androidtv.appletv"], tv: ["com.apple.atve.androidtv.appletv"] },
+  { key: "hulu", match: /^hulu/i, search: (q) => `https://www.hulu.com/search?q=${enc(q)}`, phone: ["com.hulu.plus"], tv: ["com.hulu.livingroomplus"] },
+  { key: "max", match: /^(hbo )?max\b|hbo max/i, search: (q) => `https://play.max.com/search?q=${enc(q)}`, phone: ["com.wbd.stream", "com.hbo.hbonow"], tv: ["com.wbd.stream", "com.hbo.hbonow"] },
+  { key: "apple", match: /apple tv/i, search: (q) => `https://tv.apple.com/search?term=${enc(q)}`, phone: ["com.apple.atve.androidtv.appletv"], tv: ["com.apple.atve.androidtv.appletv"] },
   { match: /paramount/i, search: (q) => `https://www.paramountplus.com/search/?q=${enc(q)}`, phone: ["com.cbs.app"], tv: ["com.cbs.ott"] },
   { match: /peacock/i, search: (q) => `https://www.peacocktv.com/search?q=${enc(q)}`, phone: ["com.peacocktv.peacockandroid"], tv: ["com.peacocktv.peacockandroid"] },
   { match: /youtube/i, search: (q) => `https://www.youtube.com/results?search_query=${enc(q)}`, phone: ["com.google.android.youtube"], tv: ["com.google.android.youtube.tv", "com.google.android.youtube.tvunplugged"] },
@@ -49,8 +51,15 @@ function findService(name: string): ServiceInfo | undefined {
   return SERVICES.find((s) => s.match.test(name));
 }
 
+/** Exact title page for this provider from /api/watch-links, if known. */
+export function directLink(provider: ProviderLike, links: Record<string, string> | undefined): string | undefined {
+  const key = findService(provider.provider_name)?.key;
+  return key ? links?.[key] : undefined;
+}
+
 /** Web URL used on the website and as the phone-app fallback. */
-export function providerUrl(provider: ProviderLike, title: string, fallback?: string): string {
+export function providerUrl(provider: ProviderLike, title: string, fallback?: string, direct?: string): string {
+  if (direct) return direct;
   const service = findService(provider.provider_name);
   if (service) return service.search(title);
   return fallback || `https://www.google.com/search?q=${enc(`watch ${title} on ${provider.provider_name}`)}`;
@@ -59,8 +68,8 @@ export function providerUrl(provider: ProviderLike, title: string, fallback?: st
 export type OpenResult = { ok: true } | { ok: false; message: string };
 
 /** Opens a streaming service for a title in the best way for the current device. */
-export async function openProvider(provider: ProviderLike, title: string, fallback?: string): Promise<OpenResult> {
-  const url = providerUrl(provider, title, fallback);
+export async function openProvider(provider: ProviderLike, title: string, fallback?: string, direct?: string): Promise<OpenResult> {
+  const url = providerUrl(provider, title, fallback, direct);
 
   if (!isNativeApp()) {
     window.open(url, "_blank", "noopener,noreferrer");
@@ -75,6 +84,15 @@ export async function openProvider(provider: ProviderLike, title: string, fallba
       try {
         const { value } = await AppLauncher.canOpenUrl({ url: pkg });
         if (value) {
+          // The app's own title link opens the title page if the TV app supports it
+          if (direct) {
+            try {
+              await AppLauncher.openUrl({ url: direct });
+              return { ok: true };
+            } catch {
+              // Fall through to just launching the app
+            }
+          }
           await AppLauncher.openUrl({ url: pkg });
           return { ok: true };
         }

@@ -297,6 +297,19 @@ TMDB/JustWatch only provide a TMDB page link, so each provider button opens the 
 - Unknown providers fall back to the TMDB watch page.
 - Adding a service: add it to `SERVICES` **and** its package names to `<queries>` in `AndroidManifest.xml` (native change → new bundle).
 - Keep the "Streaming availability by JustWatch" credit (TMDB terms).
+- **Exact title pages:** `/api/watch-links` looks up the title on Wikidata (TMDB ID → Netflix/Disney+/Prime/Apple TV/Max/Hulu IDs + each service's URL pattern), cached 1 day, links restricted to each service's own domain. Missing → search link.
+
+### "Finished it?" reminders (`src/lib/watch-reminder.ts`)
+
+- In the apps, opening a streaming service schedules a local notification (episodes: 60 min; movies: runtime + 15 min) via `@capacitor/local-notifications`. One pending reminder per title.
+- Tapping it opens the title with `?watched=S-E` (or `1` for movies) → `WatchedPrompt` banner → one tap marks it watched and moves the show pointer.
+- Only if notification permission is already granted; website users don't get it.
+
+### Google TV home row (`src/lib/watch-next.ts` + `WatchNextPlugin.java`)
+
+- On TV, the app publishes up to 10 "next episode" cards (tracked shows in state `tv`) and 5 watchlist movies to the Android TV / Google TV **Watch Next** row. Refreshed on login and when the app goes to the background.
+- Cards open the app at `https://tvtime.online/shows/<id>` (explicit intent to this app) → mapped to the in-app page.
+- Cards the user removed from the row are not re-added. Needs `androidx.tvprovider` + `WRITE_EPG_DATA` permission (native change).
 
 ## Release checklists
 

@@ -104,6 +104,18 @@ export default function WhatsNewWidget() {
                           Tap Netflix, Prime Video, Disney+ and more under Where to Watch to jump straight to the title.
                         </p>
                       </div>
+                      <div>
+                        <h3 className="font-bold text-lg text-accent-yellow mb-1">Your next episodes on your TV&apos;s home screen</h3>
+                        <p className="text-sm text-text-muted leading-relaxed">
+                          On Android TV and Google TV, your up-next episodes and watchlist movies appear in the Continue watching row. Pick one to jump right back in.
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg text-accent-yellow mb-1">&ldquo;Finished it?&rdquo; reminders</h3>
+                        <p className="text-sm text-text-muted leading-relaxed">
+                          Open a show or movie in a streaming app from TTT and we&apos;ll nudge you when it&apos;s over. One tap marks the episode watched — no more forgetting to update your progress.
+                        </p>
+                      </div>
 
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <button

@@ -35,6 +35,10 @@ const config: CapacitorConfig = {
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],
     },
+    LocalNotifications: {
+      smallIcon: "ic_stat_notify",
+      iconColor: "#FFD200",
+    },
     // Self-hosted updates are driven by src/lib/live-update.ts
     CapacitorUpdater: {
       autoUpdate: false,
