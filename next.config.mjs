@@ -36,4 +36,8 @@ const appConfig = {
   images: { unoptimized: true },
 };
 
-export default isAppBundle ? appConfig : webConfig;
+export default function config(phase) {
+  if (isAppBundle) return appConfig;
+  // Separate folder so `next build` never clobbers a running `next dev`
+  return phase === "phase-development-server" ? { ...webConfig, distDir: ".next-dev" } : webConfig;
+}

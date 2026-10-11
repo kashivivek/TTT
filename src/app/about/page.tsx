@@ -5,7 +5,7 @@ import { SITE_NAME } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "About",
-  description: `${SITE_NAME} is a free, independent TV and movie tracker built as an alternative to TV Time.`,
+  description: `${SITE_NAME} is a free, independent TV and movie tracker for the web, Android and Google TV.`,
   alternates: { canonical: "/about" },
 };
 
@@ -13,15 +13,16 @@ export default function AboutPage() {
   return (
     <ContentPage title={`About ${SITE_NAME}`}>
       <p className="mt-6">
-        {SITE_NAME} is a free, independent app for keeping track of the TV shows and movies you watch. It started when long-time
-        TV Time users needed a reliable place to move their watch history, and grew into a full tracker built around one
-        question: <em>what should I watch next?</em>
+        {SITE_NAME} is a free, independent app for keeping track of the TV shows and movies you watch, on the web, Android
+        phones and tablets, and Google TV. It&apos;s built around one question: <em>what should I watch next?</em>
       </p>
 
       <h2>What you can do</h2>
       <ul>
         <li><strong>Track every episode</strong> and always see the next one to watch, with shows that get new seasons coming back to your list automatically.</li>
-        <li><strong>Import your TV Time history</strong> from a TV Time data export, including watched episodes, movies, ratings and badges.</li>
+        <li><strong>Jump straight into your streaming apps</strong> — Netflix, Hulu, Disney+, Prime Video and more open right on the title.</li>
+        <li><strong>See your next episodes on your TV&apos;s home screen</strong> with the Android TV / Google TV app.</li>
+        <li><strong>Get a &ldquo;Finished it?&rdquo; reminder</strong> after you start something, and mark it watched in one tap.</li>
         <li><strong>See what&apos;s airing</strong> in the Upcoming calendar, and get an email or push notification the day a new episode comes out.</li>
         <li><strong>Find where to watch</strong> any show or movie in your country.</li>
         <li><strong>Discover something new</strong> with trending lists and AI-powered recommendations based on what you like.</li>

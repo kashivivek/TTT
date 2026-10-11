@@ -37,34 +37,21 @@ export default function AdBanner({
     }
   }, [adSlot, isDev, inApp]);
 
-  // Never show a fake "Your Ad Here" box to real users; AdSense isn't allowed in the app.
-  if (inApp || (!isDev && !adSlot)) return null;
+  // No slot configured (or in the app, where AdSense isn't allowed): render nothing.
+  if (inApp || !adSlot) return null;
 
-  if (!isDev) {
-    return (
-      <div className={`ad-container ${className}`}>
-        <ins
-          className="adsbygoogle"
-          style={{ display: "block" }}
-          data-ad-client={adClient}
-          data-ad-slot={adSlot}
-          data-ad-format={format}
-          data-full-width-responsive={responsive ? "true" : "false"}
-        />
-      </div>
-    );
-  }
+  if (isDev) return null;
 
-  // Placeholder when no ad account is configured or in development
   return (
-    <div
-      className={`bg-card-surface/30 border border-white/5 rounded-xl flex items-center justify-center flex-col text-text-muted transition-colors hover:bg-card-surface/50 w-full h-full ${className}`}
-    >
-      <span className="text-[10px] uppercase tracking-widest mb-2 opacity-40 font-bold">Advertisement</span>
-      <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-        <span className="text-xl opacity-50">🍿</span>
-      </div>
-      <span className="text-sm font-medium opacity-50 px-4 text-center">Your Ad Here</span>
+    <div className={`ad-container ${className}`}>
+      <ins
+        className="adsbygoogle"
+        style={{ display: "block" }}
+        data-ad-client={adClient}
+        data-ad-slot={adSlot}
+        data-ad-format={format}
+        data-full-width-responsive={responsive ? "true" : "false"}
+      />
     </div>
   );
 }

@@ -13,7 +13,7 @@ import { IS_APP_BUNDLE } from "@/lib/app-routes";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tvtime.online";
 const ADSENSE_CLIENT = process.env.NEXT_PUBLIC_ADSENSE_PUB_ID || "ca-pub-9050370531125390";
 const DESCRIPTION =
-  "Track your TV shows and movies, get notified when new episodes air, and import your TV Time history. A modern, free TV Time alternative.";
+  "Track TV shows and movies, get alerts when new episodes air, and jump straight into Netflix, Hulu, Disney+ and more. Free on the web, Android and Google TV.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -90,11 +90,20 @@ export default function RootLayout({
             <AdSenseScript client={ADSENSE_CLIENT} />
             <script
               dangerouslySetInnerHTML={{
-                __html: `
+                __html:
+                  process.env.NODE_ENV === "production"
+                    ? `
                   if ('serviceWorker' in navigator && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
                     window.addEventListener('load', () => {
                       navigator.serviceWorker.register('/sw.js');
                     });
+                  }
+                `
+                    : // Dev chunk names never change, so a cached service worker would serve stale code forever
+                      `
+                  if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()));
+                    if (window.caches) caches.keys().then((ks) => ks.forEach((k) => caches.delete(k)));
                   }
                 `,
               }}
