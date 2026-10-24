@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import ContentPage from "@/components/ContentPage";
-import { CONTACT_EMAIL, POLICY_UPDATED, SITE_NAME, SITE_URL } from "@/lib/site";
+import { CONTACT_EMAIL, MIN_AGE, POLICY_UPDATED, SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -18,7 +18,7 @@ export default function PrivacyPage() {
 
       <h2>Information you give us</h2>
       <ul>
-        <li><strong>Account details:</strong> your email address and password (passwords are stored securely by our authentication provider and are never visible to us), and an optional display name.</li>
+        <li><strong>Account details:</strong> your email address and password (passwords are stored securely by our authentication provider and are never visible to us), and an optional display name. If you sign in with Google, we receive your email address and basic profile (name and picture) from Google.</li>
         <li><strong>Tracking data:</strong> the shows and movies you track, episodes you mark as watched, ratings, reviews, favorites, emotions, badges and preferences such as your country.</li>
         <li><strong>Community content:</strong> comments and reactions you post. Comments and your display name are visible to other visitors. Your email address is never shown.</li>
         <li><strong>Imports:</strong> if you upload a TV Time data export, it is processed in your browser and only the resulting watch history, ratings and similar data are saved to your account.</li>
@@ -27,7 +27,7 @@ export default function PrivacyPage() {
 
       <h2>Information collected automatically</h2>
       <ul>
-        <li><strong>Usage analytics:</strong> pages visited and in-app actions (for example, marking an episode watched) so we can understand which features are used. We use Vercel Analytics and PostHog for this.</li>
+        <li><strong>Usage analytics:</strong> pages visited and in-app actions (for example, marking an episode watched) so we can understand which features are used. We use Vercel Analytics and PostHog for this. For visitors in Europe, analytics run without storing an identifier on your device.</li>
         <li><strong>Performance data:</strong> page load timings via Vercel Speed Insights.</li>
         <li><strong>Technical data:</strong> IP address, browser type and device information, which our hosting provider records in standard server logs and uses for security and rate limiting.</li>
         <li><strong>Local storage:</strong> we store small items in your browser (such as your login session and dismissed prompts) so the app works and remembers your choices.</li>
@@ -54,12 +54,17 @@ export default function PrivacyPage() {
       <h2>How we use your information</h2>
       <ul>
         <li>To run your account and show your progress, upcoming episodes, stats, streaks and badges.</li>
-        <li>To send notifications you turn on (email digests or push notifications about new episodes). You can turn these off anytime in your profile.</li>
+        <li>To send notifications you turn on (email digests or push notifications about new episodes), and, in the apps, &quot;Finished it?&quot; reminders scheduled on your device after you open a streaming service. You can turn these off anytime in your profile or device settings.</li>
         <li>To generate recommendations, including AI suggestions. The text of your request and the titles you recently watched are sent to our AI provider to produce suggestions.</li>
         <li>To keep the service secure, prevent abuse and fix bugs.</li>
         <li>To improve the product using aggregated usage analytics.</li>
       </ul>
       <p>We do not sell your personal information.</p>
+      <p>
+        <strong>Legal bases (EEA/UK):</strong> we process your data to provide the Service you signed up for (contract), to
+        keep it secure and improve it (legitimate interests), and for personalized ads and non-essential cookies only with
+        your consent. Our providers may process data in the United States and other countries, under appropriate safeguards.
+      </p>
 
       <h2>Service providers</h2>
       <p>We share information only with providers that help us run the service:</p>
@@ -70,6 +75,7 @@ export default function PrivacyPage() {
         <li><strong>Resend:</strong> sending emails.</li>
         <li><strong>Groq:</strong> generating AI recommendations.</li>
         <li><strong>Google AdSense:</strong> advertising.</li>
+        <li><strong>Google (Sign in with Google) and Firebase Cloud Messaging:</strong> optional Google sign-in and push notifications in the Android app.</li>
         <li><strong>TMDB:</strong> show and movie information. We request titles and images from TMDB; your personal data is not sent to TMDB.</li>
       </ul>
 
@@ -90,8 +96,8 @@ export default function PrivacyPage() {
 
       <h2>Children</h2>
       <p>
-        {SITE_NAME} is not directed to children under 13, and we do not knowingly collect personal information from them. If
-        you believe a child has created an account, contact us and we will delete it.
+        {SITE_NAME} is not intended for anyone under {MIN_AGE}, and we do not knowingly collect personal information from
+        them. If you believe someone under {MIN_AGE} has created an account, contact us and we will delete it.
       </p>
 
       <h2>Security</h2>

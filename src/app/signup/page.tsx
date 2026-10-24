@@ -6,6 +6,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { useRouter, useSearchParams } from "next/navigation";
 import { safeNext } from "@/lib/safe-redirect";
 import { track } from "@/lib/analytics";
+import { MIN_AGE } from "@/lib/site";
+import GoogleButton from "@/components/GoogleButton";
 
 export default function SignupPage() {
   return (
@@ -25,11 +27,16 @@ function SignupForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
+  const [agreed, setAgreed] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
+    if (!agreed) {
+      setError(`Please confirm you're ${MIN_AGE} or older and agree to the Terms.`);
+      return;
+    }
     if (password !== confirm) {
       setError("Passwords don't match");
       return;
@@ -81,6 +88,36 @@ function SignupForm() {
         <p className="text-text-muted text-center mb-8">
           Start tracking your shows in seconds
         </p>
+
+        <label className="mb-5 flex items-start gap-3 rounded-xl bg-card-surface p-3 text-xs leading-relaxed text-text-muted">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => {
+              setAgreed(e.target.checked);
+              setError("");
+            }}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[#FFD200]"
+          />
+          <span>
+            I am {MIN_AGE} or older and agree to the{" "}
+            <Link href="/terms" className="underline hover:text-text-primary">Terms of Service</Link> and{" "}
+            <Link href="/privacy" className="underline hover:text-text-primary">Privacy Policy</Link>. I&apos;m solely responsible
+            for the content I post and how I use the platform.
+          </span>
+        </label>
+
+        <GoogleButton
+          next={next}
+          disabled={!agreed}
+          agreedToTerms={agreed}
+          onBlocked={() => setError(`Please confirm you're ${MIN_AGE} or older and agree to the Terms.`)}
+        />
+        <div className="my-5 flex items-center gap-3 text-xs text-text-muted">
+          <span className="h-px flex-1 bg-white/10" />
+          or sign up with email
+          <span className="h-px flex-1 bg-white/10" />
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
@@ -135,11 +172,6 @@ function SignupForm() {
           <Link href={`/login${next !== "/dashboard" ? `?next=${encodeURIComponent(next)}` : ""}`} className="text-accent-yellow hover:underline">
             Log in
           </Link>
-        </p>
-        <p className="text-text-muted text-xs text-center mt-4">
-          By signing up you agree to our{" "}
-          <Link href="/terms" className="underline hover:text-text-primary">Terms</Link> and{" "}
-          <Link href="/privacy" className="underline hover:text-text-primary">Privacy Policy</Link>.
         </p>
       </div>
     </main>

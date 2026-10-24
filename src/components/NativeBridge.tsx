@@ -55,7 +55,8 @@ export default function NativeBridge() {
             window.open(url, "_blank");
             return;
           }
-          router.push(appPath(`${u.pathname}${u.search}`));
+          // Keep status messages (e.g. email-change confirmation) but never put tokens in the URL
+          router.push(appPath(`${u.pathname}${u.search}`) + (accessToken ? "" : u.hash));
         } catch {
           // Ignore malformed links
         }

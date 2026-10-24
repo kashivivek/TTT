@@ -73,6 +73,12 @@ export async function GET(request: NextRequest) {
 
   const today = todayISO(new Date());
 
+  // Retention promised on /account-deletion: deletion records are kept for 90 days
+  await admin
+    .from("account_deletions")
+    .delete()
+    .lt("created_at", new Date(Date.now() - 90 * 86_400_000).toISOString());
+
   const { data: prefRows } = await admin
     .from("notification_preferences")
     .select("user_id, email_enabled, push_enabled")

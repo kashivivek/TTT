@@ -8,9 +8,25 @@ const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posth
 type Props = Record<string, string | number | boolean | null | undefined>;
 
 let currentUserId: string | null = null;
+let memoryAnonId: string | null = null;
+
+// EEA/UK/CH by time zone; there we keep no identifier on the device, so analytics need no cookie consent.
+const EUROPE_EXTRA_ZONES = new Set(["Atlantic/Reykjavik", "Atlantic/Canary", "Atlantic/Madeira", "Atlantic/Azores", "Atlantic/Faroe"]);
+function inEurope(): boolean {
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    return zone.startsWith("Europe/") || EUROPE_EXTRA_ZONES.has(zone);
+  } catch {
+    return false;
+  }
+}
 
 function anonId(): string {
   if (typeof window === "undefined") return "server";
+  if (inEurope()) {
+    localStorage.removeItem("ttt-anon-id");
+    return (memoryAnonId ??= crypto.randomUUID());
+  }
   let id = localStorage.getItem("ttt-anon-id");
   if (!id) {
     id = crypto.randomUUID();

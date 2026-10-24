@@ -78,7 +78,6 @@ function DashboardContent() {
   
   const [upcomingMovies, setUpcomingMovies] = useState<any[]>([]);
   const [unreleasedMovieIds, setUnreleasedMovieIds] = useState<Set<number>>(new Set());
-  const [showImportPopup, setShowImportPopup] = useState(false);
   const [loadingUpcoming, setLoadingUpcoming] = useState(false);
 
   // Re-sync shows when the user returns to this tab (throttled)
@@ -169,19 +168,9 @@ function DashboardContent() {
           setShows(rows);
           refreshStaleShows(rows);
 
-          if (data.length === 0) {
-            const seenServer = user?.user_metadata?.has_seen_import_popup;
-            const hasDismissedLocal = localStorage.getItem("hasDismissedImport");
-            if (!seenServer && !hasDismissedLocal) {
-              const { data: watchData } = await getSupabase()
-                .from("watch_history")
-                .select("tmdb_id")
-                .eq("user_id", user.id)
-                .limit(1);
-              if (!watchData || watchData.length === 0) {
-                setShowImportPopup(true);
-              }
-            }
+          // First visit with nothing tracked: onboarding instead of an empty dashboard
+          if (data.length === 0 && !user.user_metadata?.onboarded) {
+            router.replace("/welcome");
           }
         }
       } catch {
@@ -771,14 +760,6 @@ function DashboardContent() {
                       >
                         Browse trending
                       </button>
-                      {tab === "shows" && (
-                        <button
-                          onClick={() => router.push("/profile?import=1")}
-                          className="rounded-full border border-white/10 px-5 py-2.5 font-bold hover:bg-white/5"
-                        >
-                          Import from TV Time
-                        </button>
-                      )}
                     </div>
                   </div>
                 );
@@ -1003,33 +984,6 @@ function DashboardContent() {
       )}
 
       <BottomNav />
-      
-      {showImportPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={async () => { setShowImportPopup(false); if (typeof window !== "undefined") localStorage.setItem("hasDismissedImport", "true"); if (user) { try { await getSupabase().auth.updateUser({ data: { has_seen_import_popup: true } }); } catch {} } }}>
-          <div className="bg-card-surface border border-accent-yellow/20 rounded-2xl max-w-lg w-full p-8 relative" onClick={(e) => e.stopPropagation()}>
-            <button className="absolute top-4 right-4 text-text-muted hover:text-white" onClick={async () => { setShowImportPopup(false); if (typeof window !== "undefined") localStorage.setItem("hasDismissedImport", "true"); if (user) { try { await getSupabase().auth.updateUser({ data: { has_seen_import_popup: true } }); } catch {} } }}>✕</button>
-            <h2 style={{ marginTop: 0, fontSize: "24px", fontWeight: "bold" }}>🚀 Import Your TV Time History</h2>
-            <p style={{ fontSize: "16px", color: "#aaa", marginBottom: "20px" }}>Move all your watched shows, movies, and custom watchlists over to our platform in just a few minutes!</p>
-            
-            <h3 style={{ fontSize: "18px", marginBottom: "8px", fontWeight: "bold" }}>How it works:</h3>
-            <ul style={{ paddingLeft: "20px", lineHeight: 1.6, marginBottom: "20px", listStyleType: "disc", color: "#ddd" }}>
-              <li><strong>Request Data:</strong> Go to the <a href="https://tvtime.com" target="_blank" rel="noopener noreferrer" className="text-accent-yellow hover:underline">TV Time Data Portal</a> and log in.</li>
-              <li><strong>Submit Request:</strong> Click the button to request your GDPR Data Export.</li>
-              <li><strong>Check Email:</strong> TV Time will email you a password-protected .zip file alongside a decryption password.</li>
-              <li><strong>Upload Here:</strong> Head over to your Profile Settings, drop the .zip file into the importer, and enter your password.</li>
-            </ul>
-            
-            <div className="popup-links flex flex-col sm:flex-row gap-4 my-6 text-sm">
-              <a href="https://tvtime.com" target="_blank" rel="noopener noreferrer" onClick={() => { if (typeof window !== "undefined") localStorage.setItem("hasDismissedImport", "true"); }} className="bg-white/10 hover:bg-white/20 px-4 py-3 rounded-xl text-center font-bold flex-1 transition-colors">👉 Go to TV Time</a>
-              <a href="/profile?import=1" onClick={async () => { if (typeof window !== "undefined") localStorage.setItem("hasDismissedImport", "true"); if (user) { try { await getSupabase().auth.updateUser({ data: { has_seen_import_popup: true } }); } catch {} } }} className="bg-accent-yellow text-bg-primary hover:brightness-110 px-4 py-3 rounded-xl text-center font-bold flex-1 transition-colors">⚙️ Go to Profile</a>
-            </div>
-            
-            <p style={{ fontSize: "13px", color: "#777", fontStyle: "italic", margin: 0 }}>
-              (Note: Data generation by TV Time can take anywhere from a few minutes to a few hours depending on their system load.)
-            </p>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

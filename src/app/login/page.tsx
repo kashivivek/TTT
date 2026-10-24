@@ -6,6 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useRouter, useSearchParams } from "next/navigation";
 import { safeNext } from "@/lib/safe-redirect";
 import { track } from "@/lib/analytics";
+import GoogleButton from "@/components/GoogleButton";
 
 export default function LoginPage() {
   return (
@@ -54,6 +55,13 @@ function LoginForm() {
         <p className="text-text-muted text-center mb-8">
           Log in to continue tracking your shows
         </p>
+
+        <GoogleButton next={next} />
+        <div className="my-5 flex items-center gap-3 text-xs text-text-muted">
+          <span className="h-px flex-1 bg-white/10" />
+          or log in with email
+          <span className="h-px flex-1 bg-white/10" />
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <input

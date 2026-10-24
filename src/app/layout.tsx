@@ -8,6 +8,7 @@ import AdSenseScript from "@/components/AdSenseScript";
 import AnalyticsTracker from "@/components/AnalyticsTracker";
 import NativeBridge from "@/components/NativeBridge";
 import FocusNavigation from "@/components/FocusNavigation";
+import TermsGate from "@/components/TermsGate";
 import { IS_APP_BUNDLE } from "@/lib/app-routes";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tvtime.online";
@@ -68,6 +69,7 @@ export default function RootLayout({
           <AnalyticsTracker />
           <NativeBridge />
           <FocusNavigation />
+          <TermsGate />
           <div className="flex justify-center w-full min-h-screen">
             {/* Left Ad Banner */}
             <div className="hidden xl:block w-[160px] 2xl:w-[200px] flex-shrink-0 pt-24 sticky top-0 h-screen mx-4">

@@ -14,6 +14,7 @@ import ReviewsTab from "@/components/profile/ReviewsTab";
 import BadgesTab from "@/components/profile/BadgesTab";
 import ProfileInsights from "@/components/profile/ProfileInsights";
 import NotificationSettings from "@/components/profile/NotificationSettings";
+import EmailSettings from "@/components/profile/EmailSettings";
 import SiteFooter from "@/components/SiteFooter";
 import { authFetch } from "@/lib/auth-fetch";
 import { track } from "@/lib/analytics";
@@ -687,10 +688,7 @@ export default function ProfilePage() {
 
         {/* Account actions */}
         <section className="mt-6 space-y-3">
-          <div className="bg-card-surface rounded-xl px-5 py-4">
-            <p className="text-text-muted text-xs mb-1">Email</p>
-            <p className="text-text-primary text-sm">{user.email}</p>
-          </div>
+          <EmailSettings />
           <div className="bg-card-surface rounded-xl px-5 py-4">
             <p className="text-text-muted text-xs mb-1">Member since</p>
             <p className="text-text-primary text-sm">

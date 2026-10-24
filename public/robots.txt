@@ -6,6 +6,7 @@ Disallow: /dashboard
 Disallow: /profile
 Disallow: /calendar
 Disallow: /update-password
+Disallow: /welcome
 
 # Explicitly permit Google AdSense review crawlers
 User-agent: Mediapartners-Google
